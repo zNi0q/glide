@@ -78,6 +78,16 @@ pub enum Source {
 }
 
 const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(5);
+const RECORDING_CURSOR: [CursorMode; 3] = [
+    CursorMode::Metadata,
+    CursorMode::Embedded,
+    CursorMode::Hidden,
+];
+const SCREENSHOT_CURSOR: [CursorMode; 3] = [
+    CursorMode::Hidden,
+    CursorMode::Metadata,
+    CursorMode::Embedded,
+];
 
 #[derive(Debug)]
 pub struct Cancelled;
@@ -151,14 +161,14 @@ pub fn record(
     on_start: impl FnOnce(),
 ) -> Result<Recording> {
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    with_stream(source, |node_id, fd| {
+    with_stream(source, &RECORDING_CURSOR, |node_id, fd| {
         on_start();
         capture(dir, node_id, fd, stop)
     })
 }
 
 pub fn screenshot(source: Source) -> Result<Image> {
-    with_stream(source, |node_id, fd| {
+    with_stream(source, &SCREENSHOT_CURSOR, |node_id, fd| {
         let latest = Arc::new(Mutex::new(Latest::default()));
         let (stop, signal) = stop_channel();
         let watcher = {
@@ -195,9 +205,13 @@ pub fn portal_runtime() -> &'static tokio::runtime::Runtime {
     RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("cannot start the async runtime"))
 }
 
-fn with_stream<T>(source: Source, use_stream: impl FnOnce(u32, OwnedFd) -> Result<T>) -> Result<T> {
+fn with_stream<T>(
+    source: Source,
+    cursor_preference: &[CursorMode],
+    use_stream: impl FnOnce(u32, OwnedFd) -> Result<T>,
+) -> Result<T> {
     let runtime = portal_runtime();
-    let (proxy, session, node_id, fd) = runtime.block_on(open_portal(source))?;
+    let (proxy, session, node_id, fd) = runtime.block_on(open_portal(source, cursor_preference))?;
     let result = use_stream(node_id, fd);
     let _ = runtime.block_on(session.close());
     drop(proxy);
@@ -206,6 +220,7 @@ fn with_stream<T>(source: Source, use_stream: impl FnOnce(u32, OwnedFd) -> Resul
 
 async fn open_portal(
     source: Source,
+    cursor_preference: &[CursorMode],
 ) -> Result<(
     Screencast,
     ashpd::desktop::Session<Screencast>,
@@ -215,24 +230,29 @@ async fn open_portal(
     let proxy = Screencast::new()
         .await
         .context("the ScreenCast portal is unavailable")?;
-    if !proxy
-        .available_cursor_modes()
-        .await?
-        .contains(CursorMode::Metadata)
-    {
-        bail!("the ScreenCast portal cannot report the cursor position separately");
+    let source_type = match source {
+        Source::Window => SourceType::Window,
+        Source::Screen => SourceType::Monitor,
+    };
+    if !proxy.available_source_types().await?.contains(source_type) {
+        bail!(match source {
+            Source::Window => "this desktop cannot share single windows, choose Screen instead",
+            Source::Screen => "this desktop cannot share whole screens, choose Window instead",
+        });
     }
+    let cursor_modes = proxy.available_cursor_modes().await.unwrap_or_default();
+    let cursor_mode = cursor_preference
+        .iter()
+        .copied()
+        .find(|mode| cursor_modes.contains(*mode));
 
     let session = proxy.create_session(Default::default()).await?;
     proxy
         .select_sources(
             &session,
             SelectSourcesOptions::default()
-                .set_cursor_mode(CursorMode::Metadata)
-                .set_sources(BitFlags::from(match source {
-                    Source::Window => SourceType::Window,
-                    Source::Screen => SourceType::Monitor,
-                }))
+                .set_cursor_mode(cursor_mode)
+                .set_sources(BitFlags::from(source_type))
                 .set_multiple(false)
                 .set_persist_mode(PersistMode::DoNot),
         )
