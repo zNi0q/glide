@@ -45,6 +45,7 @@ const ZOOMS: [(Option<f32>, &str, &str); 4] = [
 enum Phase {
     Toolbar,
     Picking(StopHandle),
+    Capturing,
     Recording { since: Instant, stop: StopHandle },
     Finishing,
     Rendering { done: usize, total: usize },
@@ -155,13 +156,14 @@ impl Toolbar {
                     );
                     self.set_phase(Phase::Rendering { done: 0, total: 0 });
                 }
-                Event::RecordingFinished(Err(e)) => {
-                    if matches!(self.phase, Phase::Picking(_)) {
+                Event::RecordingFinished(Err(e)) | Event::ScreenshotFinished(Err(e)) => {
+                    if jobs::is_cancelled(&e) {
                         self.set_phase(Phase::Toolbar);
                     } else {
                         self.set_phase(Phase::Failed(format!("{e:#}")));
                     }
                 }
+                Event::ScreenshotFinished(Ok(image)) => self.set_phase(Phase::Done(image)),
                 Event::RenderProgress(done, total) => {
                     if let Phase::Rendering { done: d, total: t } = &mut self.phase {
                         (*d, *t) = (done, total);
@@ -190,7 +192,7 @@ impl Toolbar {
 
         match &self.phase {
             Phase::Toolbar => self.toolbar(ui, &painter, &mut glass, screen, lift, entrance),
-            Phase::Picking(_) => {
+            Phase::Picking(_) | Phase::Capturing => {
                 let text = match self.source {
                     Source::Window => "Pick a window in the dialog…",
                     Source::Screen => "Pick a screen in the dialog…",
@@ -305,6 +307,7 @@ impl Toolbar {
         };
         let zoom_w = menu_w("Zoom", zoom_value);
         let background_w = menu_w("Background", background_value);
+        let screenshot_w = 14.0 + 18.0 + 8.0 + width_of("Screenshot") + 14.0;
         let record_w = 18.0 + 12.0 + 8.0 + width_of("Record") + 18.0;
         let divider_w = 9.0;
         let width = PAD * 2.0
@@ -315,7 +318,8 @@ impl Toolbar {
             + divider_w
             + record_w
             + ITEM
-            + GAP * 6.0;
+            + screenshot_w
+            + GAP * 7.0;
 
         let panel = self.panel_rect(ui, screen, width, ITEM + PAD * 2.0, lift);
         glass.paint(painter, panel, PANEL_RADIUS, opacity);
@@ -398,6 +402,22 @@ impl Toolbar {
 
         divider(painter, row(x, divider_w));
         x += divider_w + GAP;
+
+        let shot = row(x, screenshot_w);
+        if button(ui, painter, shot, "screenshot", false).clicked() {
+            jobs::take_screenshot(self.source, self.background.clone(), self.events.clone());
+            self.set_phase(Phase::Capturing);
+            return;
+        }
+        camera_icon(painter, pos2(shot.left() + 14.0 + 9.0, shot.center().y));
+        painter.text(
+            pos2(shot.left() + 14.0 + 18.0 + 8.0, shot.center().y),
+            Align2::LEFT_CENTER,
+            "Screenshot",
+            font.clone(),
+            TEXT,
+        );
+        x += screenshot_w + GAP;
 
         let record = row(x, record_w);
         let response = ui
@@ -1142,6 +1162,26 @@ fn screen_icon(painter: &Painter, c: egui::Pos2) {
         ],
         icon_stroke(),
     );
+}
+
+fn camera_icon(painter: &Painter, c: egui::Pos2) {
+    let body = Rect::from_center_size(c + vec2(0.0, 1.0), vec2(17.0, 12.0));
+    painter.rect_stroke(
+        body,
+        CornerRadius::same(3),
+        icon_stroke(),
+        StrokeKind::Middle,
+    );
+    painter.add(Shape::line(
+        vec![
+            pos2(c.x - 4.0, body.top()),
+            pos2(c.x - 2.5, body.top() - 2.2),
+            pos2(c.x + 2.5, body.top() - 2.2),
+            pos2(c.x + 4.0, body.top()),
+        ],
+        icon_stroke(),
+    ));
+    painter.circle_stroke(body.center(), 3.2, icon_stroke());
 }
 
 fn zoom_icon(painter: &Painter, c: egui::Pos2) {

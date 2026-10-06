@@ -11,7 +11,7 @@ use ashpd::desktop::file_chooser::{FileFilter, SelectedFiles};
 
 use crate::{
     background::Background,
-    record::{self, Source, StopHandle},
+    record::{self, Cancelled, Source, StopHandle},
     render,
 };
 
@@ -20,6 +20,7 @@ pub enum Event {
     RecordingFinished(Result<PathBuf>),
     RenderProgress(usize, usize),
     RenderFinished(Result<PathBuf>),
+    ScreenshotFinished(Result<PathBuf>),
     BackgroundChosen(Option<PathBuf>),
 }
 
@@ -49,6 +50,21 @@ pub fn start_render(dir: PathBuf, zoom: f32, background: Background, events: Sen
         });
         let _ = events.send(Event::RenderFinished(result));
     });
+}
+
+pub fn take_screenshot(source: Source, background: Background, events: Sender<Event>) {
+    thread::spawn(move || {
+        let result = record::screenshot(source).and_then(|image| {
+            let output = output_file("PICTURES", "Pictures", &stamp(), "png")?;
+            render::still(&image, &output, &background)?;
+            Ok(output)
+        });
+        let _ = events.send(Event::ScreenshotFinished(result));
+    });
+}
+
+pub fn is_cancelled(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<Cancelled>().is_some()
 }
 
 pub fn choose_background(events: Sender<Event>) {
@@ -117,28 +133,35 @@ fn raw_dir() -> Result<PathBuf> {
         Some(dir) => PathBuf::from(dir),
         None => home()?.join(".cache"),
     };
-    let stamp = jiff::Zoned::now().strftime("%Y-%m-%d_%H-%M-%S").to_string();
-    Ok(cache.join("glide").join(stamp))
+    Ok(cache.join("glide").join(stamp()))
+}
+
+fn stamp() -> String {
+    jiff::Zoned::now().strftime("%Y-%m-%d_%H-%M-%S").to_string()
 }
 
 fn output_path(raw_dir: &Path) -> Result<PathBuf> {
-    let videos = Command::new("xdg-user-dir")
-        .arg("VIDEOS")
-        .output()
-        .ok()
-        .map(|out| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
-        .filter(|dir| dir.is_absolute() && Some(dir.as_path()) != home().ok().as_deref());
-    let dir = match videos {
-        Some(dir) => dir,
-        None => home()?.join("Videos"),
-    }
-    .join("glide");
-    fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
     let name = raw_dir
         .file_name()
         .context("recording directory has no name")?
         .to_string_lossy();
-    Ok(dir.join(format!("glide-{name}.mp4")))
+    output_file("VIDEOS", "Videos", &name, "mp4")
+}
+
+fn output_file(xdg_dir: &str, fallback: &str, name: &str, extension: &str) -> Result<PathBuf> {
+    let xdg = Command::new("xdg-user-dir")
+        .arg(xdg_dir)
+        .output()
+        .ok()
+        .map(|out| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
+        .filter(|dir| dir.is_absolute() && Some(dir.as_path()) != home().ok().as_deref());
+    let dir = match xdg {
+        Some(dir) => dir,
+        None => home()?.join(fallback),
+    }
+    .join("glide");
+    fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    Ok(dir.join(format!("glide-{name}.{extension}")))
 }
 
 #[cfg(test)]
