@@ -22,6 +22,7 @@ use crate::{
 
 const ITEM: f32 = 38.0;
 const BOTTOM_GAP: f32 = 48.0;
+const WINDOW_BOTTOM_GAP: f32 = 12.0;
 const PAD: f32 = 8.0;
 const GAP: f32 = 6.0;
 const PANEL_RADIUS: f32 = 26.0;
@@ -91,12 +92,14 @@ pub struct Toolbar {
     indicator: Option<[Spring; 2]>,
     last_frame: Instant,
     dt: f32,
+    window_mode: bool,
+    move_requested: bool,
     pub regions: Vec<(Rect, f32)>,
     pub quit: bool,
 }
 
 impl Toolbar {
-    pub fn new() -> Self {
+    pub fn new(window_mode: bool) -> Self {
         let (events, inbox) = mpsc::channel();
         Self {
             phase: Phase::Toolbar,
@@ -112,6 +115,8 @@ impl Toolbar {
             indicator: None,
             last_frame: Instant::now(),
             dt: 0.0,
+            window_mode,
+            move_requested: false,
             regions: Vec::new(),
             quit: false,
         }
@@ -126,6 +131,10 @@ impl Toolbar {
             Phase::Done(_) | Phase::Failed(_) => self.set_phase(Phase::Toolbar),
             _ => {}
         }
+    }
+
+    pub fn take_move_request(&mut self) -> bool {
+        mem::take(&mut self.move_requested)
     }
 
     fn set_phase(&mut self, phase: Phase) {
@@ -233,6 +242,14 @@ impl Toolbar {
         }
     }
 
+    fn bottom_gap(&self) -> f32 {
+        if self.window_mode {
+            WINDOW_BOTTOM_GAP
+        } else {
+            BOTTOM_GAP
+        }
+    }
+
     fn panel_rect(
         &mut self,
         ui: &mut Ui,
@@ -255,7 +272,7 @@ impl Toolbar {
         };
         let anchor = clamp(
             self.anchor
-                .unwrap_or(pos2(screen.center().x, screen.bottom() - BOTTOM_GAP)),
+                .unwrap_or(pos2(screen.center().x, screen.bottom() - self.bottom_gap())),
         );
         let rect = Rect::from_min_max(
             pos2(anchor.x - width / 2.0, anchor.y - height),
@@ -264,7 +281,9 @@ impl Toolbar {
         self.regions.push((rect, height / 2.0));
 
         let drag = ui.interact(rect, ui.id().with("drag"), Sense::drag());
-        if drag.dragged() {
+        if self.window_mode {
+            self.move_requested |= drag.drag_started();
+        } else if drag.dragged() {
             self.anchor = Some(clamp(anchor + drag.drag_delta()));
             ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
         }
@@ -1246,7 +1265,7 @@ mod tests {
 
     #[test]
     fn liquid_indicator_stretches_then_settles() {
-        let mut toolbar = Toolbar::new();
+        let mut toolbar = Toolbar::new(false);
         toolbar.dt = 1.0 / 60.0;
         let window = Rect::from_min_size(pos2(103.0, 3.0), vec2(100.0, 32.0));
         let screen = Rect::from_min_size(pos2(205.0, 3.0), vec2(96.0, 32.0));

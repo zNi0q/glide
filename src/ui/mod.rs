@@ -25,6 +25,10 @@ use smithay_client_toolkit::{
             Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
             LayerSurfaceConfigure,
         },
+        xdg::{
+            XdgShell,
+            window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
+        },
     },
     shm::{Shm, ShmHandler},
 };
@@ -33,6 +37,10 @@ use wayland_client::{
     globals::registry_queue_init,
     protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface},
 };
+use wayland_protocols::ext::background_effect::v1::client::{
+    ext_background_effect_manager_v1::ExtBackgroundEffectManagerV1,
+    ext_background_effect_surface_v1::ExtBackgroundEffectSurfaceV1,
+};
 use wayland_protocols_plasma::blur::client::{
     org_kde_kwin_blur::OrgKdeKwinBlur, org_kde_kwin_blur_manager::OrgKdeKwinBlurManager,
 };
@@ -40,6 +48,31 @@ use wayland_protocols_plasma::blur::client::{
 use toolbar::Toolbar;
 
 const BTN_LEFT: u32 = 0x110;
+const WINDOW_W: u32 = 1040;
+const WINDOW_H: u32 = 300;
+
+enum Shell {
+    Layer(LayerSurface),
+    Window(Window),
+}
+
+impl Shell {
+    fn surface(&self) -> &wl_surface::WlSurface {
+        match self {
+            Shell::Layer(layer) => layer.wl_surface(),
+            Shell::Window(window) => window.wl_surface(),
+        }
+    }
+
+    fn commit(&self) {
+        self.surface().commit();
+    }
+}
+
+enum Blur {
+    Kde(OrgKdeKwinBlur),
+    Standard(ExtBackgroundEffectSurfaceV1),
+}
 
 pub fn run() -> Result<()> {
     let conn = Connection::connect_to_env().context("cannot connect to the Wayland display")?;
@@ -47,28 +80,44 @@ pub fn run() -> Result<()> {
     let qh = queue.handle();
 
     let compositor = CompositorState::bind(&globals, &qh).context("wl_compositor is missing")?;
-    let layer_shell =
-        LayerShell::bind(&globals, &qh).context("the compositor has no layer-shell support")?;
     let shm = Shm::bind(&globals, &qh).context("wl_shm is missing")?;
-    let blur_manager = globals
-        .bind::<OrgKdeKwinBlurManager, _, _>(&qh, 1..=1, ())
-        .ok();
 
     let surface = compositor.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("glide"), None);
-    layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_size(0, 0);
-    layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
-    layer.commit();
-    let blur = blur_manager
-        .as_ref()
-        .map(|manager| manager.create(layer.wl_surface(), &qh, ()));
+    let shell = match LayerShell::bind(&globals, &qh) {
+        Ok(layer_shell) => {
+            let layer =
+                layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("glide"), None);
+            layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
+            layer.set_size(0, 0);
+            layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
+            Shell::Layer(layer)
+        }
+        Err(_) => {
+            let xdg =
+                XdgShell::bind(&globals, &qh).context("the compositor has no window support")?;
+            let window = xdg.create_window(surface, WindowDecorations::RequestClient, &qh);
+            window.set_title("glide");
+            window.set_app_id("glide");
+            window.set_min_size(Some((WINDOW_W, WINDOW_H)));
+            window.set_max_size(Some((WINDOW_W, WINDOW_H)));
+            Shell::Window(window)
+        }
+    };
+    shell.commit();
+
+    let blur = match globals.bind::<OrgKdeKwinBlurManager, _, _>(&qh, 1..=1, ()) {
+        Ok(manager) => Some(Blur::Kde(manager.create(shell.surface(), &qh, ()))),
+        Err(_) => globals
+            .bind::<ExtBackgroundEffectManagerV1, _, _>(&qh, 1..=1, ())
+            .ok()
+            .map(|manager| Blur::Standard(manager.get_background_effect(shell.surface(), &qh, ()))),
+    };
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let display =
         NonNull::new(conn.backend().display_ptr().cast()).context("no Wayland display")?;
     let window =
-        NonNull::new(layer.wl_surface().id().as_ptr().cast()).context("no Wayland surface")?;
+        NonNull::new(shell.surface().id().as_ptr().cast()).context("no Wayland surface")?;
     let gpu_surface = unsafe {
         instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
             raw_display_handle: Some(wgpu::rwh::RawDisplayHandle::Wayland(
@@ -118,8 +167,11 @@ pub fn run() -> Result<()> {
         output_state: OutputState::new(&globals, &qh),
         compositor,
         shm,
-        layer,
+        toolbar: Toolbar::new(matches!(shell, Shell::Window(_))),
+        shell,
         blur,
+        seat: None,
+        press_serial: 0,
         pointer: None,
         keyboard: None,
         cursor: CursorIcon::Default,
@@ -130,7 +182,6 @@ pub fn run() -> Result<()> {
         alpha_mode,
         renderer,
         ctx,
-        toolbar: Toolbar::new(),
         input: Vec::new(),
         pointer_pos: Pos2::ZERO,
         size: (0, 0),
@@ -173,8 +224,10 @@ struct App {
     output_state: OutputState,
     compositor: CompositorState,
     shm: Shm,
-    layer: LayerSurface,
-    blur: Option<OrgKdeKwinBlur>,
+    shell: Shell,
+    blur: Option<Blur>,
+    seat: Option<wl_seat::WlSeat>,
+    press_serial: u32,
     pointer: Option<ThemedPointer>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     cursor: CursorIcon,
@@ -241,6 +294,18 @@ impl App {
             self.exit = true;
             return;
         }
+        if self.toolbar.take_move_request()
+            && let (Shell::Window(window), Some(seat)) = (&self.shell, &self.seat)
+        {
+            window.move_(seat, self.press_serial);
+            self.input.push(egui::Event::PointerButton {
+                pos: self.pointer_pos,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: Default::default(),
+            });
+            self.input.push(egui::Event::PointerGone);
+        }
         self.apply_regions(qh);
         self.update_cursor(output.platform_output.cursor_icon);
 
@@ -258,7 +323,7 @@ impl App {
             _ => {
                 self.configure_gpu_surface();
                 self.request_frame(qh);
-                self.layer.commit();
+                self.shell.commit();
                 return;
             }
         };
@@ -303,8 +368,20 @@ impl App {
         }
     }
 
+    fn resize(&mut self, qh: &QueueHandle<Self>, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        self.size = (width, height);
+        self.configure_gpu_surface();
+        if !self.configured {
+            self.configured = true;
+            self.draw(qh);
+        }
+    }
+
     fn request_frame(&self, qh: &QueueHandle<Self>) {
-        let surface = self.layer.wl_surface();
+        let surface = self.shell.surface();
         surface.frame(qh, FrameCallbackData(surface.clone()));
     }
 
@@ -322,15 +399,20 @@ impl App {
         }
         let _ = qh;
         if let Ok(input) = rounded_region(&self.compositor, &regions) {
-            self.layer
-                .wl_surface()
+            self.shell
+                .surface()
                 .set_input_region(Some(input.wl_region()));
         }
         if let Some(blur) = &self.blur
             && let Ok(area) = rounded_region(&self.compositor, &regions)
         {
-            blur.set_region(Some(area.wl_region()));
-            blur.commit();
+            match blur {
+                Blur::Kde(blur) => {
+                    blur.set_region(Some(area.wl_region()));
+                    blur.commit();
+                }
+                Blur::Standard(effect) => effect.set_blur_region(Some(area.wl_region())),
+            }
         }
         self.applied_regions = regions;
     }
@@ -376,7 +458,7 @@ impl CompositorHandler for App {
         surface: &wl_surface::WlSurface,
         new_factor: i32,
     ) {
-        if surface == self.layer.wl_surface() && new_factor != self.scale {
+        if surface == self.shell.surface() && new_factor != self.scale {
             self.scale = new_factor;
             surface.set_buffer_scale(new_factor);
             if self.configured {
@@ -449,15 +531,29 @@ impl LayerShellHandler for App {
         _serial: u32,
     ) {
         let (w, h) = configure.new_size;
-        if w == 0 || h == 0 {
-            return;
-        }
-        self.size = (w, h);
-        self.configure_gpu_surface();
-        if !self.configured {
-            self.configured = true;
-            self.draw(qh);
-        }
+        self.resize(qh, w, h);
+    }
+}
+
+impl WindowHandler for App {
+    fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _window: &Window) {
+        self.exit = true;
+    }
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        _window: &Window,
+        configure: WindowConfigure,
+        _serial: u32,
+    ) {
+        let (w, h) = configure.new_size;
+        self.resize(
+            qh,
+            w.map_or(WINDOW_W, |w| w.get()),
+            h.map_or(WINDOW_H, |h| h.get()),
+        );
     }
 }
 
@@ -477,6 +573,9 @@ impl SeatHandler for App {
     ) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             self.keyboard = self.seat_state.get_keyboard(qh, &seat, None).ok();
+        }
+        if self.seat.is_none() {
+            self.seat = Some(seat.clone());
         }
         if capability == Capability::Pointer && self.pointer.is_none() {
             let cursor_surface = self.compositor.create_surface(qh);
@@ -591,7 +690,7 @@ impl PointerHandler for App {
         events: &[PointerEvent],
     ) {
         for event in events {
-            if &event.surface != self.layer.wl_surface() {
+            if &event.surface != self.shell.surface() {
                 continue;
             }
             let pos = Pos2::new(event.position.0 as f32, event.position.1 as f32);
@@ -612,6 +711,9 @@ impl PointerHandler for App {
                 | PointerEventKind::Release { button, .. }
                     if button == BTN_LEFT =>
                 {
+                    if let PointerEventKind::Press { serial, .. } = event.kind {
+                        self.press_serial = serial;
+                    }
                     self.input.push(egui::Event::PointerButton {
                         pos: self.pointer_pos,
                         button: egui::PointerButton::Primary,
@@ -644,6 +746,30 @@ impl Dispatch<OrgKdeKwinBlurManager, ()> for App {
         _: &mut Self,
         _: &OrgKdeKwinBlurManager,
         _: <OrgKdeKwinBlurManager as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ExtBackgroundEffectManagerV1, ()> for App {
+    fn event(
+        _: &mut Self,
+        _: &ExtBackgroundEffectManagerV1,
+        _: <ExtBackgroundEffectManagerV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ExtBackgroundEffectSurfaceV1, ()> for App {
+    fn event(
+        _: &mut Self,
+        _: &ExtBackgroundEffectSurfaceV1,
+        _: <ExtBackgroundEffectSurfaceV1 as Proxy>::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
