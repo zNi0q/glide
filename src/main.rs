@@ -35,6 +35,18 @@ enum Command {
         #[arg(help = "Directory to store the raw recording in")]
         dir: PathBuf,
     },
+    #[command(about = "Take a polished screenshot of a window (chosen in the system dialog)")]
+    Screenshot {
+        #[arg(short, long, default_value = "glide.png", help = "Output image file")]
+        output: PathBuf,
+        #[arg(long, help = "Capture the whole screen instead of a window")]
+        screen: bool,
+        #[arg(
+            long,
+            help = "Background image (defaults to your KDE wallpaper, else a gradient)"
+        )]
+        background: Option<PathBuf>,
+    },
     #[command(about = "Render a recording into a finished video")]
     Render {
         #[arg(help = "Directory produced by `glide record`")]
@@ -68,6 +80,22 @@ fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Ui => ui::run(),
         Command::Record { dir } => record::run_cli(&dir),
+        Command::Screenshot {
+            output,
+            screen,
+            background,
+        } => {
+            let source = if screen {
+                record::Source::Screen
+            } else {
+                record::Source::Window
+            };
+            let image = record::screenshot(source)?;
+            let background = background.map_or(Background::Wallpaper, Background::Image);
+            render::still(&image, &output, &background)?;
+            println!("Saved {}", output.display());
+            Ok(())
+        }
         Command::Render {
             dir,
             output,

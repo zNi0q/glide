@@ -13,7 +13,8 @@ use crate::{
     CURSOR_FILE, FPS, SCREEN_FILE,
     background::{self, Background},
     camera::{self, Camera, Point},
-    gpu::{Compositor, Params},
+    gpu::{Compositor, Output, Params},
+    record::Image,
 };
 
 const SCENE_W: u32 = 1920;
@@ -68,7 +69,7 @@ pub fn run(
     let cursors = camera::smooth_cursor(&cursor, FPS);
     let total_frames = cursor.len();
     let background = background::load(background, OUT_W, OUT_H)?;
-    let compositor = Compositor::new((win_w, win_h), (OUT_W, OUT_H), &background)?;
+    let compositor = Compositor::new((win_w, win_h), (OUT_W, OUT_H), &background, Output::Nv12)?;
     drop(background);
 
     let mut decoder = Command::new("ffmpeg")
@@ -113,24 +114,11 @@ pub fn run(
         }
     });
 
-    let overview = Camera {
-        x: SCENE_W as f32 / 2.0,
-        y: SCENE_H as f32 / 2.0,
-        zoom: 1.0,
-    };
+    let overview = overview();
     let mut rendered = 0;
     for window in decoded_rx {
         let cam = cameras.get(rendered).unwrap_or(&overview);
-        let cursor = match cursors.get(rendered) {
-            Some(Some((x, y))) => [*x, *y, 1.0, 0.0],
-            _ => [0.0; 4],
-        };
-        let params = Params {
-            camera: [cam.x, cam.y, cam.zoom, 0.0],
-            window_rect: [layout.x, layout.y, layout.width, layout.height],
-            cursor,
-            sizes: [OUT_W as f32, OUT_H as f32, SCENE_W as f32, SCENE_H as f32],
-        };
+        let params = frame_params(&layout, cam, cursors.get(rendered).copied().flatten());
         let mut nv12 = free_rx.try_recv().unwrap_or_default();
         compositor.render(&window, &params, &mut nv12)?;
         let _ = spare_tx.send(window);
@@ -153,6 +141,68 @@ pub fn run(
         bail!("ffmpeg failed with {status}");
     }
     Ok(())
+}
+
+pub fn still(image: &Image, output: &Path, background: &Background) -> Result<()> {
+    let layout = Layout::new(image.width, image.height);
+    let background = background::load(background, OUT_W, OUT_H)?;
+    let compositor = Compositor::new(
+        (image.width, image.height),
+        (OUT_W, OUT_H),
+        &background,
+        Output::Rgba,
+    )?;
+    let mut rgba = Vec::new();
+    compositor.render(
+        &image.rgba,
+        &frame_params(&layout, &overview(), None),
+        &mut rgba,
+    )?;
+
+    let mut encoder = Command::new("ffmpeg")
+        .args([
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgba",
+        ])
+        .args(["-video_size", &format!("{OUT_W}x{OUT_H}"), "-i", "-"])
+        .args(["-frames:v", "1"])
+        .arg(output)
+        .stdin(Stdio::piped())
+        .spawn()
+        .context("cannot start ffmpeg (is it installed?)")?;
+    encoder
+        .stdin
+        .take()
+        .expect("stdin is piped")
+        .write_all(&rgba)
+        .context("ffmpeg stopped accepting the image")?;
+    let status = encoder.wait()?;
+    if !status.success() {
+        bail!("ffmpeg failed with {status}");
+    }
+    Ok(())
+}
+
+fn overview() -> Camera {
+    Camera {
+        x: SCENE_W as f32 / 2.0,
+        y: SCENE_H as f32 / 2.0,
+        zoom: 1.0,
+    }
+}
+
+fn frame_params(layout: &Layout, cam: &Camera, cursor: Option<Point>) -> Params {
+    Params {
+        camera: [cam.x, cam.y, cam.zoom, 0.0],
+        window_rect: [layout.x, layout.y, layout.width, layout.height],
+        cursor: cursor.map_or([0.0; 4], |(x, y)| [x, y, 1.0, 0.0]),
+        sizes: [OUT_W as f32, OUT_H as f32, SCENE_W as f32, SCENE_H as f32],
+    }
 }
 
 fn encoder_command(output: &Path) -> Command {
@@ -248,6 +298,38 @@ fn read_cursor_log(path: &Path) -> Result<Vec<Option<Point>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "needs a GPU and ffmpeg"]
+    fn still_renders_a_4k_png() {
+        let (width, height) = (320, 200);
+        let rgba = (0..width * height)
+            .flat_map(|i| [(i % width) as u8, 120, 200, 255])
+            .collect();
+        let image = Image {
+            width,
+            height,
+            rgba,
+        };
+        let output = std::env::temp_dir().join("glide-still-test.png");
+        still(&image, &output, &Background::Gradient).unwrap();
+        let probe = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=width,height,codec_name",
+            ])
+            .args(["-of", "csv=p=0"])
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&probe.stdout).trim(),
+            "png,3840,2160"
+        );
+        fs::remove_file(output).unwrap();
+    }
 
     #[test]
     fn layout_centers_window_with_margin() {

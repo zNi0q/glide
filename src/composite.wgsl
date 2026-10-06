@@ -9,7 +9,7 @@ struct Params {
 @group(0) @binding(1) var window_texture: texture_2d<f32>;
 @group(0) @binding(2) var linear_sampler: sampler;
 @group(0) @binding(3) var background_texture: texture_2d<f32>;
-@group(0) @binding(4) var<storage, read_write> nv12: array<u32>;
+@group(0) @binding(4) var<storage, read_write> output: array<u32>;
 
 const CORNER_RADIUS: f32 = 14.0;
 const SHADOW_OFFSET: f32 = 18.0;
@@ -115,5 +115,14 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
             bytes[2u * i + 1u] = 128.0 + 224.0 * (rgb.r - y) / 1.5748;
         }
     }
-    nv12[id.y * words_per_row + id.x] = pack4x8unorm(bytes / 255.0);
+    output[id.y * words_per_row + id.x] = pack4x8unorm(bytes / 255.0);
+}
+
+@compute @workgroup_size(16, 16)
+fn main_rgba(@builtin(global_invocation_id) id: vec3u) {
+    let width = u32(params.sizes.x);
+    if id.x >= width || id.y >= u32(params.sizes.y) {
+        return;
+    }
+    output[id.y * width + id.x] = pack4x8unorm(vec4f(color_at(vec2f(id.xy) + 0.5), 1.0));
 }

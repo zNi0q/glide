@@ -12,6 +12,12 @@ pub struct Params {
     pub sizes: [f32; 4],
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Output {
+    Nv12,
+    Rgba,
+}
+
 pub struct Compositor {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -19,7 +25,7 @@ pub struct Compositor {
     bind_group: wgpu::BindGroup,
     params: wgpu::Buffer,
     window: wgpu::Texture,
-    nv12: wgpu::Buffer,
+    output: wgpu::Buffer,
     readback: wgpu::Buffer,
     window_size: (u32, u32),
     workgroups: (u32, u32),
@@ -30,6 +36,7 @@ impl Compositor {
         window_size: (u32, u32),
         output_size: (u32, u32),
         background_rgba: &[u8],
+        output: Output,
     ) -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -46,7 +53,10 @@ impl Compositor {
             label: Some("composite"),
             layout: None,
             module: &module,
-            entry_point: Some("main"),
+            entry_point: Some(match output {
+                Output::Nv12 => "main",
+                Output::Rgba => "main_rgba",
+            }),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -65,16 +75,20 @@ impl Compositor {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        let nv12_size = u64::from(output_size.0 * output_size.1 * 3 / 2);
-        let nv12 = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("nv12"),
-            size: nv12_size,
+        let (words_per_row, rows) = match output {
+            Output::Nv12 => (output_size.0 / 4, output_size.1 * 3 / 2),
+            Output::Rgba => (output_size.0, output_size.1),
+        };
+        let output_bytes = u64::from(words_per_row * rows * 4);
+        let output = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("output"),
+            size: output_bytes,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("readback"),
-            size: nv12_size,
+            size: output_bytes,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -105,13 +119,11 @@ impl Compositor {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: nv12.as_entire_binding(),
+                    resource: output.as_entire_binding(),
                 },
             ],
         });
 
-        let words_per_row = output_size.0 / 4;
-        let rows = output_size.1 * 3 / 2;
         Ok(Self {
             device,
             queue,
@@ -119,14 +131,14 @@ impl Compositor {
             bind_group,
             params,
             window,
-            nv12,
+            output,
             readback,
             window_size,
             workgroups: (words_per_row.div_ceil(16), rows.div_ceil(16)),
         })
     }
 
-    pub fn render(&self, window_rgba: &[u8], params: &Params, nv12: &mut Vec<u8>) -> Result<()> {
+    pub fn render(&self, window_rgba: &[u8], params: &Params, pixels: &mut Vec<u8>) -> Result<()> {
         write_rgba(&self.queue, &self.window, window_rgba, self.window_size);
         self.queue
             .write_buffer(&self.params, 0, bytemuck::bytes_of(params));
@@ -138,7 +150,7 @@ impl Compositor {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.dispatch_workgroups(self.workgroups.0, self.workgroups.1, 1);
         }
-        encoder.copy_buffer_to_buffer(&self.nv12, 0, &self.readback, 0, None);
+        encoder.copy_buffer_to_buffer(&self.output, 0, &self.readback, 0, None);
         self.queue.submit([encoder.finish()]);
 
         let slice = self.readback.slice(..);
@@ -156,8 +168,8 @@ impl Compositor {
         let frame = slice
             .get_mapped_range()
             .context("cannot read the frame back from the GPU")?;
-        nv12.clear();
-        nv12.extend_from_slice(&frame);
+        pixels.clear();
+        pixels.extend_from_slice(&frame);
         drop(frame);
         self.readback.unmap();
         Ok(())

@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     fs::File,
     io::{BufWriter, Write},
     os::{fd::OwnedFd, unix::process::CommandExt},
@@ -15,7 +16,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 use ashpd::{
     desktop::{
-        PersistMode, Session,
+        PersistMode, ResponseError,
         screencast::{CursorMode, Screencast, SelectSourcesOptions, SourceType},
     },
     enumflags2::BitFlags,
@@ -53,10 +54,46 @@ struct Frame {
     data: Vec<u8>,
 }
 
+impl Frame {
+    fn into_image(mut self) -> Image {
+        let swap_red_blue = self.pix_fmt.starts_with("bgr");
+        for pixel in self.data.as_chunks_mut::<4>().0 {
+            if swap_red_blue {
+                pixel.swap(0, 2);
+            }
+            pixel[3] = 255;
+        }
+        Image {
+            width: self.width as u32,
+            height: self.height as u32,
+            rgba: self.data,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
     Window,
     Screen,
+}
+
+const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Debug)]
+pub struct Cancelled;
+
+impl fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("selection was cancelled")
+    }
+}
+
+impl std::error::Error for Cancelled {}
+
+pub struct Image {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
 }
 
 pub struct Recording {
@@ -114,17 +151,62 @@ pub fn record(
     on_start: impl FnOnce(),
 ) -> Result<Recording> {
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    with_stream(source, |node_id, fd| {
+        on_start();
+        capture(dir, node_id, fd, stop)
+    })
+}
 
+pub fn screenshot(source: Source) -> Result<Image> {
+    with_stream(source, |node_id, fd| {
+        let latest = Arc::new(Mutex::new(Latest::default()));
+        let (stop, signal) = stop_channel();
+        let watcher = {
+            let latest = Arc::clone(&latest);
+            thread::spawn(move || {
+                let deadline = Instant::now() + FIRST_FRAME_TIMEOUT;
+                while Instant::now() < deadline
+                    && latest
+                        .lock()
+                        .expect("capture state poisoned")
+                        .frame
+                        .is_none()
+                {
+                    thread::sleep(Duration::from_millis(5));
+                }
+                stop.stop();
+            })
+        };
+        let streamed = stream_window(node_id, fd, Arc::clone(&latest), signal);
+        let _ = watcher.join();
+        streamed?;
+        let frame = latest
+            .lock()
+            .expect("capture state poisoned")
+            .frame
+            .take()
+            .context("no frame arrived from the compositor")?;
+        Ok(frame.into_image())
+    })
+}
+
+fn with_stream<T>(source: Source, use_stream: impl FnOnce(u32, OwnedFd) -> Result<T>) -> Result<T> {
     let runtime = tokio::runtime::Runtime::new()?;
     let (proxy, session, node_id, fd) = runtime.block_on(open_portal(source))?;
-    on_start();
-    let result = capture(dir, node_id, fd, stop);
+    let result = use_stream(node_id, fd);
     let _ = runtime.block_on(session.close());
     drop(proxy);
     result
 }
 
-async fn open_portal(source: Source) -> Result<(Screencast, Session<Screencast>, u32, OwnedFd)> {
+async fn open_portal(
+    source: Source,
+) -> Result<(
+    Screencast,
+    ashpd::desktop::Session<Screencast>,
+    u32,
+    OwnedFd,
+)> {
     let proxy = Screencast::new()
         .await
         .context("the ScreenCast portal is unavailable")?;
@@ -154,7 +236,10 @@ async fn open_portal(source: Source) -> Result<(Screencast, Session<Screencast>,
         .start(&session, None, Default::default())
         .await?
         .response()
-        .context("selection was cancelled")?;
+        .map_err(|e| match e {
+            ashpd::Error::Response(ResponseError::Cancelled) => anyhow::Error::new(Cancelled),
+            other => anyhow::Error::new(other),
+        })?;
     let node_id = streams
         .streams()
         .first()
@@ -489,4 +574,27 @@ fn serialize(object: Object) -> Vec<u8> {
         .expect("pod serialization into memory cannot fail")
         .0
         .into_inner()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Frame;
+
+    #[test]
+    fn frames_become_opaque_rgba() {
+        let frame = |pix_fmt| Frame {
+            width: 2,
+            height: 1,
+            pix_fmt,
+            data: vec![10, 20, 30, 0, 40, 50, 60, 7],
+        };
+        assert_eq!(
+            frame("bgr0").into_image().rgba,
+            [30, 20, 10, 255, 60, 50, 40, 255]
+        );
+        assert_eq!(
+            frame("rgba").into_image().rgba,
+            [10, 20, 30, 255, 40, 50, 60, 255]
+        );
+    }
 }
