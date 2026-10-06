@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" width="128" height="128" alt="glide logo">
+</p>
+
 # glide
 
 Polished screen recordings and screenshots for Linux. Record a window and glide
