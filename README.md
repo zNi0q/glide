@@ -161,3 +161,7 @@ The last command also runs the tests that need a GPU and ffmpeg.
 
 `design/toolbar-preview.html` is an interactive mockup of the toolbar styles.
 Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
+
+## License
+
+glide is released under the [MIT License](LICENSE).
