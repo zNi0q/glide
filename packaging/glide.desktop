@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=glide
+GenericName=Screen Recorder
+Comment=Polished screen recordings and screenshots
+Exec=glide ui
+Icon=glide
+Terminal=false
+Categories=AudioVideo;Video;Recorder;
+Keywords=screen;record;recorder;screenshot;capture;video;
+StartupNotify=false
