@@ -1,8 +1,9 @@
 # glide
 
-Polished screen recordings for Linux. Record a window and glide turns it into a
-4K video with the window centered on your wallpaper, rounded corners, a smooth
-redrawn cursor, and an optional camera that zooms in and follows your cursor.
+Polished screen recordings and screenshots for Linux. Record a window and glide
+turns it into a 4K video with the window centered on your wallpaper, rounded
+corners, a smooth redrawn cursor, and an optional camera that zooms in and
+follows your cursor. Screenshots get the same treatment as a 4K PNG.
 
 It is inspired by macOS tools like Screen Studio and built for KDE Plasma on
 Wayland.
@@ -17,6 +18,8 @@ Wayland.
 - **Cursor-following zoom (opt-in).** With `--zoom`, the camera looks ahead
   and zooms into where you are working, then eases back out when the cursor
   roams or rests.
+- **Polished screenshots.** Capture a window or the whole screen as a 4K
+  PNG, framed the same way as the videos.
 - **Smooth cursor.** The real cursor is hidden while recording and redrawn
   afterwards as a crisp, smoothed arrow at any zoom level.
 - **4K output, rendered on the GPU.** Compositing runs in a wgpu compute
@@ -65,10 +68,13 @@ A glass toolbar appears near the bottom of the screen. Drag it anywhere.
 3. Press **■** in the recording pill to stop.
 4. glide renders the video and shows **Open** and **Show in folder**.
 
+Press **Screenshot** instead of Record to capture a single polished image.
+
 Press **Esc** or **✕** to close the toolbar.
 
-Finished videos are saved to `~/Videos/glide/` (your XDG videos directory).
-Raw recordings are kept in `~/.cache/glide/` so they can be rendered again.
+Videos are saved to `~/Videos/glide/` and screenshots to `~/Pictures/glide/`
+(your XDG directories). Raw recordings are kept in `~/.cache/glide/` so they can
+be rendered again.
 
 #### Keyboard shortcut
 
@@ -99,6 +105,14 @@ glide render myvideo -o myvideo.mp4 --background ~/Pictures/backdrop.jpg
 | `--zoom [factor]` | Follow the cursor with zoom, up to `factor` (1 to 4, default 1.8). Without it the video is not zoomed. |
 | `--background <image>` | Use an image behind the window instead of your KDE wallpaper. |
 
+Take a screenshot of a window, or of the whole screen with `--screen`:
+
+```sh
+glide screenshot -o shot.png
+glide screenshot -o shot.png --screen
+glide screenshot -o shot.png --background ~/Pictures/backdrop.jpg
+```
+
 ## How it works
 
 ```
@@ -107,6 +121,8 @@ record:  portal ─► PipeWire frames ─► lossless screen.mkv
 
 render:  ffmpeg decode ─► GPU compute shader ─► NV12 ─► VAAPI H.264 ─► mp4
                           (wallpaper, rounded window, camera, cursor)
+
+screenshot: portal ─► one PipeWire frame ─► GPU compute shader ─► RGBA ─► png
 ```
 
 - `src/record.rs` talks to the ScreenCast portal and PipeWire. The cursor is
@@ -115,7 +131,7 @@ render:  ffmpeg decode ─► GPU compute shader ─► NV12 ─► VAAPI H.264 
 - `src/camera.rs` plans the camera offline with look-ahead and smooths every
   move with critically damped springs.
 - `src/composite.wgsl` and `src/gpu.rs` composite each frame on the GPU and
-  write NV12 directly for the hardware encoder.
+  write NV12 directly for the hardware encoder, or full RGBA for screenshots.
 - `src/render.rs` pipelines decoding, compositing and encoding on separate
   threads.
 - `src/ui/` is the toolbar: a full-screen click-through layer-shell surface
@@ -138,7 +154,10 @@ render:  ffmpeg decode ─► GPU compute shader ─► NV12 ─► VAAPI H.264 
 cargo fmt
 cargo clippy --all-targets -- -D warnings
 cargo test
+cargo test --release -- --include-ignored
 ```
+
+The last command also runs the tests that need a GPU and ffmpeg.
 
 `design/toolbar-preview.html` is an interactive mockup of the toolbar styles.
 Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
