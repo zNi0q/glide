@@ -66,7 +66,23 @@ sudo apt install clang libpipewire-0.3-dev ffmpeg libvulkan1 xdg-desktop-portal-
 
 Install Rust itself with [rustup](https://rustup.rs).
 
-## Build
+## Install
+
+Download the archive for your machine (`x86_64-linux` or `aarch64-linux`) from
+the [latest release](https://github.com/zNi0q/glide/releases/latest), then:
+
+```sh
+sha256sum -c glide-*-linux.tar.gz.sha256
+tar -xzf glide-*-linux.tar.gz
+install -Dm755 glide-*-linux/glide ~/.local/bin/glide
+```
+
+The binary needs glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40, Arch
+and newer), plus PipeWire, libxkbcommon, `ffmpeg` and your desktop's portal
+backend at runtime. These are already installed on most Wayland desktops. On
+older distributions, build from source instead.
+
+## Build from source
 
 ```sh
 cargo build --release
@@ -203,7 +219,7 @@ Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
 ## License
 
 glide is free for non-commercial use under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md).
+[PolyForm Noncommercial License 1.0.0](LICENSE).
 
 You may use, study, modify and share it for personal projects, hobbies,
 research, education, and charitable or public organizations. Any commercial
