@@ -2,6 +2,10 @@
 name = "glide"
 version = "0.1.0"
 edition = "2024"
+description = "Polished screen recordings and screenshots for KDE Plasma on Wayland"
+license = "MIT"
+readme = "README.md"
+rust-version = "1.95"
 
 [dependencies]
 anyhow = "1.0.104"
