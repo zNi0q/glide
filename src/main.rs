@@ -4,8 +4,12 @@ mod gpu;
 mod record;
 mod render;
 mod ui;
+mod update;
 
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -30,6 +34,11 @@ struct Cli {
 enum Command {
     #[command(about = "Show the floating recording toolbar")]
     Ui,
+    #[command(about = "Check for a newer glide release and install it")]
+    Update {
+        #[arg(short, long, help = "Install without asking")]
+        yes: bool,
+    },
     #[command(about = "Record a window (chosen in the system dialog). Stop with Ctrl+C")]
     Record {
         #[arg(help = "Directory to store the raw recording in")]
@@ -79,6 +88,7 @@ fn parse_zoom(s: &str) -> Result<f32, String> {
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Ui => ui::run(),
+        Command::Update { yes } => self_update(yes),
         Command::Record { dir } => record::run_cli(&dir),
         Command::Screenshot {
             output,
@@ -119,4 +129,28 @@ fn main() -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn self_update(yes: bool) -> Result<()> {
+    let current = update::Version::current();
+    let Some(release) = update::available()? else {
+        println!("glide {current} is up to date");
+        return Ok(());
+    };
+    println!(
+        "glide {} is available (you have {current}).",
+        release.version
+    );
+    if !yes {
+        print!("Install it now? [Y/n] ");
+        io::stdout().flush()?;
+        let mut answer = String::new();
+        io::stdin().read_line(&mut answer)?;
+        if answer.trim().to_lowercase().starts_with('n') {
+            return Ok(());
+        }
+    }
+    let exe = update::install(&release)?;
+    println!("Updated {} to glide {}", exe.display(), release.version);
+    Ok(())
 }
