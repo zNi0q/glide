@@ -3,7 +3,7 @@ name = "glide"
 version = "0.1.0"
 edition = "2024"
 description = "Polished screen recordings and screenshots for KDE Plasma on Wayland"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 readme = "README.md"
 rust-version = "1.95"
 

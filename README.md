@@ -164,4 +164,10 @@ Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
 
 ## License
 
-glide is released under the [MIT License](LICENSE).
+glide is free for non-commercial use under the
+[PolyForm Noncommercial License 1.0.0](LICENSE).
+
+You may use, study, modify and share it for personal projects, hobbies,
+research, education, and charitable or public organizations. Any commercial
+use, including selling glide or building it into a paid product or service,
+is not permitted without written permission from the author.
