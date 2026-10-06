@@ -6,7 +6,7 @@ use std::{
     path::Path,
     process::{Command, Stdio},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -190,8 +190,13 @@ pub fn screenshot(source: Source) -> Result<Image> {
     })
 }
 
+pub fn portal_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| tokio::runtime::Runtime::new().expect("cannot start the async runtime"))
+}
+
 fn with_stream<T>(source: Source, use_stream: impl FnOnce(u32, OwnedFd) -> Result<T>) -> Result<T> {
-    let runtime = tokio::runtime::Runtime::new()?;
+    let runtime = portal_runtime();
     let (proxy, session, node_id, fd) = runtime.block_on(open_portal(source))?;
     let result = use_stream(node_id, fd);
     let _ = runtime.block_on(session.close());
@@ -578,7 +583,27 @@ fn serialize(object: Object) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::Frame;
+    use super::{Frame, portal_runtime};
+
+    #[test]
+    #[ignore = "needs a desktop session with the ScreenCast portal"]
+    fn portal_answers_repeated_requests() {
+        for _ in 0..2 {
+            let modes = portal_runtime().block_on(async {
+                let query = async {
+                    ashpd::desktop::screencast::Screencast::new()
+                        .await?
+                        .available_cursor_modes()
+                        .await
+                };
+                tokio::time::timeout(std::time::Duration::from_secs(3), query).await
+            });
+            assert!(
+                matches!(modes, Ok(Ok(_))),
+                "portal did not answer: {modes:?}"
+            );
+        }
+    }
 
     #[test]
     fn frames_become_opaque_rgba() {

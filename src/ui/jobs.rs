@@ -69,9 +69,10 @@ pub fn is_cancelled(error: &anyhow::Error) -> bool {
 
 pub fn choose_background(events: Sender<Event>) {
     thread::spawn(move || {
-        let chosen = tokio::runtime::Runtime::new()
+        let chosen = record::portal_runtime()
+            .block_on(pick_image())
             .ok()
-            .and_then(|runtime| runtime.block_on(pick_image()).ok().flatten());
+            .flatten();
         let _ = events.send(Event::BackgroundChosen(chosen));
     });
 }
