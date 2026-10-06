@@ -1,7 +1,9 @@
 use std::{
     f32::consts::TAU,
     mem,
+    os::unix::process::CommandExt,
     path::PathBuf,
+    process::Command,
     sync::mpsc::{self, Receiver, Sender},
     time::Instant,
 };
@@ -18,6 +20,7 @@ use super::{
 use crate::{
     background::Background,
     record::{Source, StopHandle},
+    update::{Release, Version},
 };
 
 const ITEM: f32 = 38.0;
@@ -72,6 +75,14 @@ impl Spring {
     }
 }
 
+enum Update {
+    Hidden,
+    Available(Release),
+    Installing(Version),
+    Installed(Version, PathBuf),
+    Failed(String),
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Menu {
     Zoom,
@@ -94,6 +105,7 @@ pub struct Toolbar {
     dt: f32,
     window_mode: bool,
     move_requested: bool,
+    update: Update,
     pub regions: Vec<(Rect, f32)>,
     pub quit: bool,
 }
@@ -117,6 +129,7 @@ impl Toolbar {
             dt: 0.0,
             window_mode,
             move_requested: false,
+            update: Update::Hidden,
             regions: Vec::new(),
             quit: false,
         }
@@ -131,6 +144,10 @@ impl Toolbar {
             Phase::Done(_) | Phase::Failed(_) => self.set_phase(Phase::Toolbar),
             _ => {}
         }
+    }
+
+    pub fn check_for_update(&self) {
+        jobs::check_for_update(self.events.clone());
     }
 
     pub fn take_move_request(&mut self) -> bool {
@@ -182,6 +199,14 @@ impl Toolbar {
                 Event::RenderFinished(Err(e)) => self.set_phase(Phase::Failed(format!("{e:#}"))),
                 Event::BackgroundChosen(Some(path)) => self.background = Background::Image(path),
                 Event::BackgroundChosen(None) => {}
+                Event::UpdateAvailable(release) => self.update = Update::Available(release),
+                Event::UpdateInstalled(result) => {
+                    self.update = match (result, &self.update) {
+                        (Ok(exe), Update::Installing(version)) => Update::Installed(*version, exe),
+                        (Ok(_), _) => Update::Hidden,
+                        (Err(e), _) => Update::Failed(format!("{e:#}")),
+                    };
+                }
             }
         }
     }
@@ -479,7 +504,110 @@ impl Toolbar {
             Some(Menu::Background) => {
                 self.background_menu(ui, painter, glass, panel, background_rect, opacity)
             }
-            None => {}
+            None => self.update_chip(ui, painter, glass, panel, opacity),
+        }
+    }
+
+    fn update_chip(
+        &mut self,
+        ui: &mut Ui,
+        painter: &Painter,
+        glass: &mut GlassPainter,
+        panel: Rect,
+        opacity: f32,
+    ) {
+        let font = FontId::proportional(13.0);
+        let (message, actions): (String, &[&str]) = match &self.update {
+            Update::Hidden => return,
+            Update::Available(release) => (
+                format!("glide {} is available", release.version),
+                &["Update", "Later"],
+            ),
+            Update::Installing(version) => (format!("Updating to glide {version}…"), &[]),
+            Update::Installed(version, _) => (format!("Updated to glide {version}"), &["Restart"]),
+            Update::Failed(error) => (
+                format!(
+                    "Update failed: {}",
+                    error.chars().take(60).collect::<String>()
+                ),
+                &["Dismiss"],
+            ),
+        };
+        let width_of = |text: &str| {
+            painter
+                .layout_no_wrap(text.to_owned(), font.clone(), TEXT)
+                .size()
+                .x
+        };
+        let action_widths: Vec<f32> = actions.iter().map(|a| width_of(a) + 24.0).collect();
+        let lead = if matches!(self.update, Update::Installing(_)) {
+            26.0
+        } else {
+            0.0
+        };
+        let width = 16.0
+            + lead
+            + width_of(&message)
+            + 10.0
+            + action_widths.iter().map(|w| w + 4.0).sum::<f32>()
+            + 6.0;
+        let height = 40.0;
+        let mut chip = Rect::from_center_size(
+            pos2(panel.center().x, panel.top() - MENU_GAP - height / 2.0),
+            vec2(width, height),
+        );
+        if chip.top() < ui.max_rect().top() {
+            chip = chip.translate(vec2(0.0, panel.height() + 2.0 * MENU_GAP + height));
+        }
+        self.regions.push((chip, height / 2.0));
+        glass.paint(painter, chip, height / 2.0, opacity);
+
+        let mut x = chip.left() + 16.0;
+        if lead > 0.0 {
+            spinner(
+                painter,
+                pos2(x + 8.0, chip.center().y),
+                self.born.elapsed().as_secs_f32(),
+            );
+            x += lead;
+        }
+        painter.text(
+            pos2(x, chip.center().y),
+            Align2::LEFT_CENTER,
+            &message,
+            font.clone(),
+            TEXT,
+        );
+
+        let mut ax = chip.right() - 6.0;
+        let mut clicked = None;
+        for (action, w) in actions.iter().zip(&action_widths).rev() {
+            ax -= w;
+            let rect = Rect::from_min_size(pos2(ax, chip.top() + 5.0), vec2(*w, height - 10.0));
+            if button(ui, painter, rect, action, false).clicked() {
+                clicked = Some(*action);
+            }
+            painter.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                *action,
+                font.clone(),
+                TEXT,
+            );
+            ax -= 4.0;
+        }
+
+        match (clicked, mem::replace(&mut self.update, Update::Hidden)) {
+            (Some("Update"), Update::Available(release)) => {
+                self.update = Update::Installing(release.version);
+                jobs::install_update(release, self.events.clone());
+            }
+            (Some("Restart"), Update::Installed(_, exe)) => {
+                let error = Command::new(exe).arg("ui").exec();
+                self.update = Update::Failed(error.to_string());
+            }
+            (Some("Later" | "Dismiss"), _) => {}
+            (_, state) => self.update = state,
         }
     }
 

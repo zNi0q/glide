@@ -13,6 +13,7 @@ use crate::{
     background::{Background, path_from_uri},
     record::{self, Cancelled, Source, StopHandle},
     render,
+    update::{self, Release},
 };
 
 pub enum Event {
@@ -22,6 +23,22 @@ pub enum Event {
     RenderFinished(Result<PathBuf>),
     ScreenshotFinished(Result<PathBuf>),
     BackgroundChosen(Option<PathBuf>),
+    UpdateAvailable(Release),
+    UpdateInstalled(Result<PathBuf>),
+}
+
+pub fn check_for_update(events: Sender<Event>) {
+    thread::spawn(move || {
+        if let Ok(Some(release)) = update::available() {
+            let _ = events.send(Event::UpdateAvailable(release));
+        }
+    });
+}
+
+pub fn install_update(release: Release, events: Sender<Event>) {
+    thread::spawn(move || {
+        let _ = events.send(Event::UpdateInstalled(update::install(&release)));
+    });
 }
 
 pub fn start_recording(source: Source, events: Sender<Event>) -> StopHandle {

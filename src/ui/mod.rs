@@ -192,6 +192,7 @@ pub fn run() -> Result<()> {
         exit: false,
     };
 
+    app.toolbar.check_for_update();
     while !app.exit {
         queue.blocking_dispatch(&mut app)?;
     }
