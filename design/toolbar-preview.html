@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glide Toolbar Preview</title>
+<style>
+:root {
+  --wallpaper: none;
+  --accent: #ff453a;
+  --font: "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+body[data-style="liquid"] {
+  --glass: rgba(255, 255, 255, 0.12);
+  --glass-strong: rgba(255, 255, 255, 0.2);
+  --blur: blur(30px) saturate(190%) brightness(1.08);
+  --edge: rgba(255, 255, 255, 0.34);
+  --edge-soft: rgba(255, 255, 255, 0.1);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.7);
+  --hover: rgba(255, 255, 255, 0.16);
+  --active: rgba(255, 255, 255, 0.3);
+  --radius: 26px;
+  --sheen: 1;
+}
+
+body[data-style="frosted"] {
+  --glass: rgba(22, 26, 36, 0.52);
+  --glass-strong: rgba(36, 42, 56, 0.72);
+  --blur: blur(24px) saturate(140%);
+  --edge: rgba(255, 255, 255, 0.12);
+  --edge-soft: rgba(255, 255, 255, 0.04);
+  --text: #eceff4;
+  --muted: rgba(216, 222, 233, 0.62);
+  --hover: rgba(136, 192, 208, 0.14);
+  --active: rgba(136, 192, 208, 0.28);
+  --radius: 18px;
+  --sheen: 0;
+}
+
+body[data-style="minimal"] {
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-strong: rgba(255, 255, 255, 0.18);
+  --blur: blur(30px) saturate(190%) brightness(1.08);
+  --edge: rgba(255, 255, 255, 0.3);
+  --edge-soft: rgba(255, 255, 255, 0.08);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.7);
+  --hover: rgba(255, 255, 255, 0.16);
+  --active: rgba(255, 255, 255, 0.3);
+  --radius: 999px;
+  --sheen: 1;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--wallpaper) center / cover no-repeat, radial-gradient(circle at 20% 20%, #3b4a6b, #1d2230 60%), #1d2230;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.glass {
+  position: relative;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--edge-soft);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.38),
+    0 2px 6px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 var(--edge),
+    inset 0 -1px 0 var(--edge-soft);
+  border-radius: var(--radius);
+  isolation: isolate;
+}
+
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--sheen);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.04) 42%, transparent 60%),
+    radial-gradient(120% 140% at 15% -20%, rgba(255, 255, 255, 0.35), transparent 45%);
+  mix-blend-mode: overlay;
+  z-index: -1;
+}
+
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: calc(var(--sheen) * 0.9);
+  background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.22) 38%, transparent 52%) 0 0 / 260% 100%;
+  animation: caustic 7s ease-in-out infinite;
+  mix-blend-mode: soft-light;
+  z-index: -1;
+}
+
+@keyframes caustic {
+  0%, 100% { background-position: 120% 0; }
+  50% { background-position: -20% 0; }
+}
+
+.switcher {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  font-size: 13px;
+  z-index: 10;
+}
+
+.switcher span {
+  padding: 0 10px 0 8px;
+  color: var(--muted);
+}
+
+.switcher button, .chip button {
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: 7px 14px;
+  border-radius: calc(var(--radius) - 6px);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+body[data-style="minimal"] .switcher button { border-radius: 999px; }
+
+.switcher button:hover { background: var(--hover); }
+
+.switcher button[aria-pressed="true"] {
+  background: var(--active);
+  box-shadow: inset 0 1px 0 var(--edge);
+}
+
+.hint {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  color: var(--muted);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+kbd {
+  font: 600 11.5px var(--font);
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+}
+
+.panel {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  transition: opacity 0.32s ease, transform 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.15), filter 0.32s ease;
+}
+
+.panel[hidden] {
+  display: flex;
+  opacity: 0;
+  transform: translateY(18px) scale(0.92);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 4px;
+  background: linear-gradient(180deg, transparent, var(--edge), transparent);
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: calc(var(--radius) - 8px);
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+body[data-style="minimal"] .segmented { border-radius: 999px; }
+
+.btn {
+  font: 500 13.5px var(--font);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  border-radius: calc(var(--radius) - 10px);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.12s ease;
+  white-space: nowrap;
+}
+
+body[data-style="minimal"] .btn { border-radius: 999px; }
+
+.btn:hover { background: var(--hover); }
+
+.btn:active { transform: scale(0.96); }
+
+.btn[aria-pressed="true"] {
+  background: var(--active);
+  box-shadow: inset 0 1px 0 var(--edge), 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.btn svg { width: 18px; height: 18px; flex: none; }
+
+.btn .value { color: var(--muted); }
+
+.btn .chev { width: 12px; height: 12px; opacity: 0.6; }
+
+.record {
+  background: linear-gradient(180deg, #ff6259, #e5352c);
+  box-shadow: 0 6px 18px rgba(255, 69, 58, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+  padding: 0 18px;
+}
+
+.record:hover { background: linear-gradient(180deg, #ff7067, #ec3d33); }
+
+.icon-btn { width: 38px; padding: 0; justify-content: center; }
+
+body[data-style="minimal"] #toolbar .label,
+body[data-style="minimal"] #toolbar .value,
+body[data-style="minimal"] #toolbar .chev { display: none; }
+
+body[data-style="minimal"] #toolbar .btn { width: 38px; padding: 0; justify-content: center; }
+
+.menu {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  min-width: 190px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border-radius: calc(min(var(--radius), 20px));
+  transition: opacity 0.2s ease, transform 0.28s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  transform-origin: bottom center;
+}
+
+.menu[hidden] {
+  display: grid;
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+  pointer-events: none;
+}
+
+.menu button {
+  font: 500 13.5px var(--font);
+  color: var(--text);
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.menu button:hover { background: var(--hover); }
+
+.menu button small { color: var(--muted); font-size: 12px; }
+
+.menu button[aria-checked="true"]::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 8px var(--text);
+}
+
+.menu-title {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.anchor { position: relative; }
+
+.pill { padding: 6px 6px 6px 16px; gap: 12px; font: 500 14px var(--font); }
+
+.pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.7);
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.65); }
+  80%, 100% { box-shadow: 0 0 0 10px rgba(255, 69, 58, 0); }
+}
+
+.timer { font-variant-numeric: tabular-nums; min-width: 44px; }
+
+.stop {
+  width: 38px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.stop:hover { background: rgba(255, 69, 58, 0.85); }
+
+.stop svg { width: 14px; height: 14px; }
+
+.progress {
+  width: 220px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #88c0d0, #b48ead);
+  box-shadow: 0 0 12px rgba(136, 192, 208, 0.8);
+  transition: width 0.12s linear;
+}
+
+.pill .status { padding-right: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.waiting { padding: 0 18px; height: 50px; color: var(--muted); font-size: 14px; }
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #30d158;
+  box-shadow: 0 0 14px rgba(48, 209, 88, 0.6);
+}
+
+.check svg { width: 13px; height: 13px; }
+
+.reopen {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  transition: opacity 0.3s ease;
+}
+
+.reopen[hidden] { display: block; opacity: 0; pointer-events: none; }
+
+@media (max-width: 760px) {
+  .hint { display: none; }
+  .switcher span { display: none; }
+}
+</style>
+</head>
+<body data-style="liquid">
+
+<div class="switcher glass" role="group" aria-label="Preview style">
+  <span>Style</span>
+  <button data-set-style="liquid" aria-pressed="true">Liquid Glass</button>
+  <button data-set-style="frosted" aria-pressed="false">Frosted Dark</button>
+  <button data-set-style="minimal" aria-pressed="false">Minimal Pill</button>
+</div>
+
+<div class="hint">Press <kbd>R</kbd> to toggle the toolbar (the real app uses <kbd>Meta</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>), <kbd>Esc</kbd> to hide</div>
+
+<div class="dock">
+  <div class="panel glass" id="toolbar">
+    <div class="segmented" role="group" aria-label="Source">
+      <button class="btn" data-source="window" aria-pressed="true" title="Record a window">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18"/><circle cx="6" cy="7" r=".6" fill="currentColor"/><circle cx="8.2" cy="7" r=".6" fill="currentColor"/></svg>
+        <span class="label">Window</span>
+      </button>
+      <button class="btn" data-source="screen" aria-pressed="false" title="Record the whole screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M9 20h6M12 16v4"/></svg>
+        <span class="label">Screen</span>
+      </button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="anchor">
+      <button class="btn" data-menu="zoom-menu" title="Cursor zoom">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5M11 8.5v5M8.5 11h5"/></svg>
+        <span class="label">Zoom</span>
+        <span class="value" id="zoom-value">Off</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6-6 6 6"/></svg>
+      </button>
+      <div class="menu glass" id="zoom-menu" hidden>
+        <div class="menu-title">Follow cursor</div>
+        <button data-zoom="Off" aria-checked="true">Off <small>normal video</small></button>
+        <button data-zoom="1.5×" aria-checked="false">1.5× <small>subtle</small></button>
+        <button data-zoom="1.8×" aria-checked="false">1.8× <small>default</small></button>
+        <button data-zoom="2.5×" aria-checked="false">2.5× <small>close-up</small></button>
+      </div>
+    </div>
+
+    <div class="anchor">
+      <button class="btn" data-menu="bg-menu" title="Background">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>
+        <span class="label">Background</span>
+        <span class="value" id="bg-value">Wallpaper</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6-6 6 6"/></svg>
+      </button>
+      <div class="menu glass" id="bg-menu" hidden>
+        <div class="menu-title">Behind the window</div>
+        <button data-bg="Wallpaper" aria-checked="true">Wallpaper <small>your desktop</small></button>
+        <button data-bg="Gradient" aria-checked="false">Gradient</button>
+        <button data-bg="Custom…" aria-checked="false">Choose image…</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn record" id="record" title="Start recording">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#fff"/></svg>
+      <span class="label">Record</span>
+    </button>
+    <button class="btn icon-btn" id="close" title="Close (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l10 10M17 7 7 17"/></svg>
+    </button>
+  </div>
+
+  <div class="panel glass waiting" id="picking" hidden>
+    <div class="spinner"></div>
+    <span id="picking-text">Pick a window in the dialog…</span>
+  </div>
+
+  <div class="panel glass pill" id="recording" hidden>
+    <div class="pulse"></div>
+    <span class="timer" id="timer">00:00</span>
+    <button class="btn stop" id="stop" title="Stop recording">
+      <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3" fill="currentColor"/></svg>
+    </button>
+  </div>
+
+  <div class="panel glass pill" id="rendering" hidden>
+    <span>Rendering 4K</span>
+    <div class="progress"><i id="bar"></i></div>
+    <span class="status" id="percent">0%</span>
+  </div>
+
+  <div class="panel glass pill" id="done" hidden>
+    <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
+    <span>Saved recording.mp4</span>
+    <button class="btn">Open</button>
+    <button class="btn">Show in folder</button>
+    <button class="btn icon-btn" id="dismiss" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 7l10 10M17 7 7 17"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="reopen glass" id="reopen" hidden>Toolbar hidden · press <kbd>R</kbd> to bring it back</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const panels = ["toolbar", "picking", "recording", "rendering", "done"];
+let state = "toolbar";
+let timerHandle = null;
+let renderHandle = null;
+
+function show(name) {
+  state = name;
+  panels.forEach((p) => { $(p).hidden = p !== name; });
+  $("reopen").hidden = name !== null;
+  closeMenus();
+}
+
+function closeMenus() {
+  document.querySelectorAll(".menu").forEach((m) => { m.hidden = true; });
+}
+
+function setStyle(style) {
+  document.body.dataset.style = style;
+  document.querySelectorAll("[data-set-style]").forEach((o) => o.setAttribute("aria-pressed", o.dataset.setStyle === style));
+}
+
+document.querySelectorAll("[data-set-style]").forEach((b) => {
+  b.addEventListener("click", () => setStyle(b.dataset.setStyle));
+});
+
+const params = new URLSearchParams(location.search);
+setStyle(params.get("style") || "liquid");
+if (params.get("wallpaper")) {
+  document.documentElement.style.setProperty("--wallpaper", `url("${params.get("wallpaper")}")`);
+}
+
+document.querySelectorAll("[data-source]").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("[data-source]").forEach((o) => o.setAttribute("aria-pressed", o === b));
+    $("picking-text").textContent = b.dataset.source === "window" ? "Pick a window in the dialog…" : "Pick a screen in the dialog…";
+  });
+});
+
+document.querySelectorAll("[data-menu]").forEach((b) => {
+  b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const menu = $(b.dataset.menu);
+    const open = menu.hidden;
+    closeMenus();
+    menu.hidden = !open;
+  });
+});
+
+function bindChoice(attr, valueId) {
+  document.querySelectorAll(`[${attr}]`).forEach((b) => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.querySelectorAll(`[${attr}]`).forEach((o) => o.setAttribute("aria-checked", o === b));
+      $(valueId).textContent = b.getAttribute(attr).replace("…", "");
+      closeMenus();
+    });
+  });
+}
+bindChoice("data-zoom", "zoom-value");
+bindChoice("data-bg", "bg-value");
+
+document.addEventListener("click", closeMenus);
+
+$("record").addEventListener("click", () => {
+  show("picking");
+  setTimeout(() => {
+    if (state !== "picking") return;
+    show("recording");
+    const start = Date.now();
+    $("timer").textContent = "00:00";
+    timerHandle = setInterval(() => {
+      const s = Math.floor((Date.now() - start) / 1000);
+      $("timer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+    }, 250);
+  }, 1400);
+});
+
+$("stop").addEventListener("click", () => {
+  clearInterval(timerHandle);
+  show("rendering");
+  let p = 0;
+  renderHandle = setInterval(() => {
+    p = Math.min(100, p + 1.6 + Math.random() * 2.4);
+    $("bar").style.width = `${p}%`;
+    $("percent").textContent = `${Math.floor(p)}%`;
+    if (p >= 100) {
+      clearInterval(renderHandle);
+      setTimeout(() => show("done"), 300);
+    }
+  }, 60);
+});
+
+$("close").addEventListener("click", () => show(null));
+$("dismiss").addEventListener("click", () => show("toolbar"));
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state === "toolbar") show(null);
+  if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey) {
+    if (state === null) show("toolbar");
+    else if (state === "toolbar") show(null);
+  }
+});
+</script>
+</body>
+</html>
