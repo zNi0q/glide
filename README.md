@@ -5,16 +5,17 @@ turns it into a 4K video with the window centered on your wallpaper, rounded
 corners, a smooth redrawn cursor, and an optional camera that zooms in and
 follows your cursor. Screenshots get the same treatment as a 4K PNG.
 
-It is inspired by macOS tools like Screen Studio and built for KDE Plasma on
-Wayland.
+It is inspired by macOS tools like Screen Studio and works on Wayland desktops:
+KDE Plasma, GNOME, COSMIC, Hyprland, Sway and other wlroots compositors.
 
 ## Features
 
 - **Window or screen recording** through the desktop's ScreenCast portal, so
   you pick what to share in the system dialog.
 - **Centered on your wallpaper.** The finished video places the window in the
-  middle of your current KDE wallpaper (or a gradient, or any image) with
-  rounded corners.
+  middle of your current desktop wallpaper (or a gradient, or any image) with
+  rounded corners. The wallpaper is detected on KDE Plasma, GNOME, Ubuntu,
+  Budgie, Cinnamon, MATE, Xfce and COSMIC, and from hyprpaper, swww and swaybg.
 - **Cursor-following zoom (opt-in).** With `--zoom`, the camera looks ahead
   and zooms into where you are working, then eases back out when the cursor
   roams or rests.
@@ -26,24 +27,40 @@ Wayland.
   shader and encoding uses VAAPI hardware H.264, falling back to x264 when
   VAAPI is unavailable.
 - **Liquid Glass toolbar.** `glide ui` shows a draggable floating toolbar
-  with real KWin background blur, a liquid selection highlight and glossy
-  buttons.
+  with a liquid selection highlight, glossy buttons and real background blur
+  where the compositor supports it.
 
 ## Requirements
 
-- Linux with a Wayland session. Developed on KDE Plasma 6 (KWin).
-- PipeWire and `xdg-desktop-portal` with a ScreenCast implementation
-  (`xdg-desktop-portal-kde` on Plasma).
+- Linux with a Wayland session.
+- PipeWire and `xdg-desktop-portal` with the backend for your desktop:
+
+  | Desktop | Portal backend |
+  | --- | --- |
+  | KDE Plasma | `xdg-desktop-portal-kde` |
+  | GNOME, Ubuntu, Budgie | `xdg-desktop-portal-gnome` |
+  | COSMIC | `xdg-desktop-portal-cosmic` |
+  | Hyprland | `xdg-desktop-portal-hyprland` |
+  | Sway, river, labwc and other wlroots | `xdg-desktop-portal-wlr` |
+
 - `ffmpeg` and `ffprobe` on `PATH`. VAAPI support is used when available.
 - A GPU with Vulkan (or OpenGL ES) drivers.
 - Rust 1.95 or newer, plus the PipeWire development headers and `clang` to
   build the PipeWire bindings.
 
-On Arch Linux:
+On Arch Linux (swap the portal backend for your desktop):
 
 ```sh
-sudo pacman -S --needed rustup clang pipewire ffmpeg xdg-desktop-portal-kde vulkan-icd-loader
+sudo pacman -S --needed rustup clang pipewire ffmpeg vulkan-icd-loader xdg-desktop-portal-kde
 ```
+
+On Debian or Ubuntu:
+
+```sh
+sudo apt install clang libpipewire-0.3-dev ffmpeg libvulkan1 xdg-desktop-portal-gnome
+```
+
+Install Rust itself with [rustup](https://rustup.rs).
 
 ## Build
 
@@ -63,6 +80,10 @@ glide ui
 
 A glass toolbar appears near the bottom of the screen. Drag it anywhere.
 
+On KDE Plasma, COSMIC, Hyprland, Sway and other compositors with layer-shell,
+the toolbar floats above all windows. GNOME has no layer-shell, so there the
+toolbar opens as a small borderless window that you drag like any window.
+
 1. Choose **Window** or **Screen**, a **Zoom** level and a **Background**.
 2. Press **Record** and pick what to record in the system dialog.
 3. Press **■** in the recording pill to stop.
@@ -78,9 +99,15 @@ be rendered again.
 
 #### Keyboard shortcut
 
-In KDE System Settings, open **Keyboard → Shortcuts → Add New → Command or
-Script**, use the full path to `glide ui` as the command, and assign a shortcut
-such as **Meta+Shift+R**.
+Bind a shortcut to the full path of `glide ui`, for example **Super+Shift+R**:
+
+- **KDE Plasma:** System Settings → Keyboard → Shortcuts → Add New → Command
+  or Script.
+- **GNOME:** Settings → Keyboard → View and Customize Shortcuts → Custom
+  Shortcuts.
+- **COSMIC:** Settings → Keyboard → Keyboard Shortcuts → Custom Shortcuts.
+- **Hyprland:** `bind = SUPER SHIFT, R, exec, glide ui` in `hyprland.conf`.
+- **Sway:** `bindsym $mod+Shift+r exec glide ui` in your Sway config.
 
 ### Command line
 
@@ -103,7 +130,7 @@ glide render myvideo -o myvideo.mp4 --background ~/Pictures/backdrop.jpg
 | --- | --- |
 | `-o, --output <file>` | Output video (default `glide.mp4`). |
 | `--zoom [factor]` | Follow the cursor with zoom, up to `factor` (1 to 4, default 1.8). Without it the video is not zoomed. |
-| `--background <image>` | Use an image behind the window instead of your KDE wallpaper. |
+| `--background <image>` | Use an image behind the window instead of your desktop wallpaper. |
 
 Take a screenshot of a window, or of the whole screen with `--screen`:
 
@@ -134,14 +161,21 @@ screenshot: portal ─► one PipeWire frame ─► GPU compute shader ─► RG
   write NV12 directly for the hardware encoder, or full RGBA for screenshots.
 - `src/render.rs` pipelines decoding, compositing and encoding on separate
   threads.
-- `src/ui/` is the toolbar: a full-screen click-through layer-shell surface
-  drawn with egui and wgpu, KWin blur behind the glass, and background jobs
-  for recording and rendering.
+- `src/ui/` is the toolbar, drawn with egui and wgpu: a full-screen
+  click-through layer-shell surface, or a borderless window where layer-shell
+  is missing. Blur comes from the standard `ext-background-effect` protocol or
+  KDE's blur protocol, whichever the compositor offers.
 
 ## Limitations
 
-- Only tested on KDE Plasma 6 (Wayland). The toolbar needs layer-shell
-  support, and its blur uses a KDE protocol.
+- Wayland only. X11 sessions are not supported.
+- Developed and tested on KDE Plasma 6. Other desktops use the same standard
+  portals and protocols but have not been tested by the author yet.
+- Without background blur support (for example on GNOME), the toolbar glass
+  is tinted but not blurred.
+- If a desktop's portal cannot report the cursor separately, the cursor is
+  recorded into the video instead, and zoom cannot follow it.
+- Some portals can only share whole screens, not single windows.
 - Videos are always 3840×2160 at 60 fps. A 1080p window is upscaled, so the
   window's own text gains no extra detail.
 - Resizing a window while recording crops it to its starting size.

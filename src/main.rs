@@ -43,7 +43,7 @@ enum Command {
         screen: bool,
         #[arg(
             long,
-            help = "Background image (defaults to your KDE wallpaper, else a gradient)"
+            help = "Background image (defaults to your desktop wallpaper, else a gradient)"
         )]
         background: Option<PathBuf>,
     },
@@ -63,7 +63,7 @@ enum Command {
         zoom: Option<f32>,
         #[arg(
             long,
-            help = "Background image (defaults to your KDE wallpaper, else a gradient)"
+            help = "Background image (defaults to your desktop wallpaper, else a gradient)"
         )]
         background: Option<PathBuf>,
     },
