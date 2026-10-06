@@ -4,3 +4,4 @@
 *.mkv
 *.png
 cursor.txt
+!assets/*.png
