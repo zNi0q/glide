@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use ashpd::desktop::file_chooser::{FileFilter, SelectedFiles};
 
 use crate::{
-    background::Background,
+    background::{Background, path_from_uri},
     record::{self, Cancelled, Source, StopHandle},
     render,
 };
@@ -96,31 +96,8 @@ async fn pick_image() -> Result<Option<PathBuf>> {
     Ok(files
         .uris()
         .first()
-        .and_then(|uri| uri.as_str().strip_prefix("file://"))
-        .map(|path| PathBuf::from(percent_decode(path))))
-}
-
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let hex = bytes
-            .get(i + 1..i + 3)
-            .and_then(|h| std::str::from_utf8(h).ok())
-            .and_then(|h| u8::from_str_radix(h, 16).ok());
-        match (bytes[i], hex) {
-            (b'%', Some(byte)) => {
-                decoded.push(byte);
-                i += 3;
-            }
-            (byte, _) => {
-                decoded.push(byte);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&decoded).into_owned()
+        .filter(|uri| uri.as_str().starts_with("file://"))
+        .map(|uri| path_from_uri(uri.as_str())))
 }
 
 fn home() -> Result<PathBuf> {
@@ -163,19 +140,4 @@ fn output_file(xdg_dir: &str, fallback: &str, name: &str, extension: &str) -> Re
     .join("glide");
     fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
     Ok(dir.join(format!("glide-{name}.{extension}")))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::percent_decode;
-
-    #[test]
-    fn decodes_file_uri_paths() {
-        assert_eq!(
-            percent_decode("/home/a/My%20Pics/x.png"),
-            "/home/a/My Pics/x.png"
-        );
-        assert_eq!(percent_decode("/caf%C3%A9.jpg"), "/café.jpg");
-        assert_eq!(percent_decode("/100%"), "/100%");
-    }
 }
