@@ -203,7 +203,7 @@ Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
 ## License
 
 glide is free for non-commercial use under the
-[PolyForm Noncommercial License 1.0.0](LICENSE).
+[PolyForm Noncommercial License 1.0.0](LICENSE.md).
 
 You may use, study, modify and share it for personal projects, hobbies,
 research, education, and charitable or public organizations. Any commercial
