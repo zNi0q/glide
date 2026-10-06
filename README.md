@@ -68,8 +68,16 @@ Install Rust itself with [rustup](https://rustup.rs).
 
 ## Install
 
-Download the archive for your machine (`x86_64-linux` or `aarch64-linux`) from
-the [latest release](https://github.com/zNi0q/glide/releases/latest), then:
+```sh
+curl -fsSL https://raw.githubusercontent.com/zNi0q/glide/master/install.sh | sh
+```
+
+This downloads the latest release for your machine, checks its checksum,
+installs `glide` to `~/.local/bin`, and adds glide to your application menu.
+
+To install by hand instead, download the archive for your machine
+(`x86_64-linux` or `aarch64-linux`) from the
+[latest release](https://github.com/zNi0q/glide/releases/latest), then:
 
 ```sh
 sha256sum -c glide-*-linux.tar.gz.sha256
@@ -81,6 +89,18 @@ The binary needs glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40, Arch
 and newer), plus PipeWire, libxkbcommon, `ffmpeg` and your desktop's portal
 backend at runtime. These are already installed on most Wayland desktops. On
 older distributions, build from source instead.
+
+## Updating
+
+When a new version is released, the toolbar shows **glide x.y.z is
+available** above it. Press **Update**, then **Restart**. From a terminal:
+
+```sh
+glide update
+```
+
+It shows the new version, asks before installing, verifies the download, and
+replaces the installed binary.
 
 ## Build from source
 
@@ -212,6 +232,14 @@ cargo test --release -- --include-ignored
 ```
 
 The last command also runs the tests that need a GPU and ffmpeg.
+
+### Releasing
+
+Every push to `master` is built and tested on GitHub Actions. To publish a
+release, raise `version` in `Cargo.toml`, run `cargo build` so `Cargo.lock`
+follows, then commit and push. When the workflow sees a version without a
+release, it tags it, builds x86_64 and aarch64 archives, and publishes them.
+Installed copies of glide then offer the update.
 
 `design/toolbar-preview.html` is an interactive mockup of the toolbar styles.
 Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
