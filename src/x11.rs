@@ -254,7 +254,7 @@ fn client_window(conn: &RustConnection, window: Window) -> Result<Window> {
     Ok(window)
 }
 
-fn escape_keycode(conn: &RustConnection) -> Result<Option<u8>> {
+pub(crate) fn escape_keycode(conn: &impl Connection) -> Result<Option<u8>> {
     let setup = conn.setup();
     let first = setup.min_keycode;
     let count = setup.max_keycode - first + 1;

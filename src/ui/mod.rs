@@ -2,6 +2,7 @@ mod glass;
 mod jobs;
 mod toolbar;
 mod wayland;
+mod xorg;
 
 use std::{process::Command, sync::Arc, time::Instant};
 
@@ -11,7 +12,11 @@ use egui::{FontData, FontDefinitions, FontFamily, Pos2, Rect, ViewportId, vec2};
 use toolbar::Toolbar;
 
 pub fn run() -> Result<()> {
-    wayland::run()
+    if crate::x11::is_session() {
+        xorg::run()
+    } else {
+        wayland::run()
+    }
 }
 
 struct Frontend {
@@ -37,20 +42,21 @@ impl Frontend {
                 .context("cannot open the GPU")?;
 
         let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| !f.is_srgb())
-            .unwrap_or(caps.formats[0]);
-        let alpha_mode = if caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
-        {
-            wgpu::CompositeAlphaMode::PreMultiplied
-        } else {
-            caps.alpha_modes[0]
-        };
+        let format = [
+            wgpu::TextureFormat::Bgra8Unorm,
+            wgpu::TextureFormat::Rgba8Unorm,
+        ]
+        .into_iter()
+        .find(|format| caps.formats.contains(format))
+        .or_else(|| caps.formats.iter().copied().find(|f| !f.is_srgb()))
+        .unwrap_or(caps.formats[0]);
+        let alpha_mode = [
+            wgpu::CompositeAlphaMode::PreMultiplied,
+            wgpu::CompositeAlphaMode::Inherit,
+        ]
+        .into_iter()
+        .find(|mode| caps.alpha_modes.contains(mode))
+        .unwrap_or(caps.alpha_modes[0]);
 
         let mut renderer = egui_wgpu::Renderer::new(&device, format, Default::default());
         glass::install(&device, format, &mut renderer.callback_resources);

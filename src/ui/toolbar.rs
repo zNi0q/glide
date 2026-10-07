@@ -255,9 +255,11 @@ impl Toolbar {
             Phase::Toolbar => self.toolbar(ui, &painter, &mut glass, screen, lift, entrance),
             Phase::Picking(_) if self.source == Source::Screen => {}
             Phase::Picking(_) | Phase::Capturing => {
-                let text = match self.source {
-                    Source::Window => "Pick a window in the dialog…",
-                    Source::Screen => "Pick a screen in the dialog…",
+                let text = match (self.source, crate::x11::is_session()) {
+                    (Source::Window, true) => "Click the window to capture…",
+                    (Source::Window, false) => "Pick a window in the dialog…",
+                    (Source::Screen, true) => "Starting…",
+                    (Source::Screen, false) => "Pick a screen in the dialog…",
                 };
                 self.waiting(ui, &painter, &mut glass, screen, lift, entrance, text);
             }
