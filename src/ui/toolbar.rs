@@ -20,6 +20,7 @@ use super::{
 use crate::{
     FPS,
     background::Background,
+    clicks,
     record::{Source, StopHandle},
     render::RenderOptions,
     update::{Release, Version},
@@ -120,6 +121,8 @@ pub struct Toolbar {
     move_requested: bool,
     update: Update,
     reveal: f32,
+    clicks: bool,
+    clicks_available: bool,
     pub regions: Vec<(Rect, f32)>,
     pub quit: bool,
 }
@@ -145,6 +148,8 @@ impl Toolbar {
             move_requested: false,
             update: Update::Hidden,
             reveal: 0.0,
+            clicks: false,
+            clicks_available: clicks::available(),
             regions: Vec::new(),
             quit: false,
         }
@@ -198,6 +203,7 @@ impl Toolbar {
                     let options = RenderOptions {
                         zoom: self.zoom.unwrap_or(1.0),
                         background: self.background.clone(),
+                        clicks: self.clicks,
                         end_frame: end.map(|end| (end.as_secs_f32() * FPS as f32) as usize),
                     };
                     jobs::start_render(dir, options, self.events.clone());
@@ -354,10 +360,16 @@ impl Toolbar {
                 .size()
                 .x
         };
-        let zoom_value = ZOOMS
+        let zoom_label = ZOOMS
             .iter()
             .find(|(z, ..)| *z == self.zoom)
             .map_or("Off", |(_, label, _)| *label);
+        let zoom_value = match (self.zoom.is_some(), self.clicks) {
+            (true, true) => format!("{zoom_label} · Clicks"),
+            (false, true) => "Clicks".to_owned(),
+            (_, false) => format!("Zoom {zoom_label}"),
+        };
+        let zoom_value = zoom_value.as_str();
         let background_value = match &self.background {
             Background::Wallpaper => "Wallpaper",
             Background::Gradient => "Gradient",
@@ -371,7 +383,7 @@ impl Toolbar {
         let menu_w = |label: &str, value: &str| {
             14.0 + 18.0 + 8.0 + width_of(label) + 8.0 + width_of(value) + 8.0 + 10.0 + 14.0
         };
-        let zoom_w = menu_w("Zoom", zoom_value);
+        let zoom_w = menu_w("Effects", zoom_value);
         let background_w = menu_w("Background", background_value);
         let screenshot_w = 14.0 + 18.0 + 8.0 + width_of("Screenshot") + 14.0;
         let record_w = 18.0 + 12.0 + 8.0 + width_of("Record") + 18.0;
@@ -441,7 +453,7 @@ impl Toolbar {
             ui,
             painter,
             zoom_rect,
-            "Zoom",
+            "Effects",
             zoom_value,
             Menu::Zoom,
             &font,
@@ -727,13 +739,29 @@ impl Toolbar {
         anchor: Rect,
         opacity: f32,
     ) {
-        let rect = self.menu_panel(painter, glass, panel, anchor, ZOOMS.len(), opacity);
+        let rect = self.menu_panel(painter, glass, panel, anchor, ZOOMS.len() + 1, opacity);
         menu_title(painter, rect, "Follow cursor");
         for (i, (zoom, label, hint)) in ZOOMS.iter().enumerate() {
             if menu_row(ui, painter, rect, i, label, hint, self.zoom == *zoom) {
                 self.zoom = *zoom;
                 self.menu = None;
             }
+        }
+        let hint = if self.clicks_available {
+            "ripples"
+        } else {
+            "needs input access"
+        };
+        if menu_row(
+            ui,
+            painter,
+            rect,
+            ZOOMS.len(),
+            "Show clicks",
+            hint,
+            self.clicks,
+        ) {
+            self.clicks = !self.clicks;
         }
     }
 

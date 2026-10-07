@@ -10,6 +10,7 @@ pub struct Params {
     pub window_rect: [f32; 4],
     pub cursor: [f32; 4],
     pub sizes: [f32; 4],
+    pub clicks: [[f32; 4]; 4],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

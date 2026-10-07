@@ -1,5 +1,6 @@
 mod background;
 mod camera;
+mod clicks;
 mod gpu;
 mod record;
 mod render;
@@ -19,6 +20,7 @@ use crate::background::Background;
 pub const FPS: u32 = 60;
 pub const SCREEN_FILE: &str = "screen.mkv";
 pub const CURSOR_FILE: &str = "cursor.txt";
+pub const CLICKS_FILE: &str = "clicks.txt";
 
 #[derive(Parser)]
 #[command(
@@ -75,6 +77,8 @@ enum Command {
             help = "Background image (defaults to your desktop wallpaper, else a gradient)"
         )]
         background: Option<PathBuf>,
+        #[arg(long, help = "Show a ripple wherever you clicked")]
+        clicks: bool,
     },
 }
 
@@ -111,10 +115,12 @@ fn main() -> Result<()> {
             output,
             zoom,
             background,
+            clicks,
         } => {
             let options = render::RenderOptions {
                 zoom: zoom.unwrap_or(1.0),
                 background: background.map_or(Background::Wallpaper, Background::Image),
+                clicks,
                 end_frame: None,
             };
             render::run(&dir, &output, &options, |done, total| {

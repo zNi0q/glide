@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use crate::{
-    CURSOR_FILE, FPS, SCREEN_FILE,
+    CLICKS_FILE, CURSOR_FILE, FPS, SCREEN_FILE,
     background::{self, Background},
     camera::{self, Camera, Point},
     gpu::{Compositor, Output, Params},
@@ -20,6 +20,7 @@ use crate::{
 const SCENE_W: u32 = 1920;
 const SCENE_H: u32 = 1080;
 const OUT_W: u32 = 3840;
+const RIPPLE_FRAMES: usize = 27;
 const OUT_H: u32 = 2160;
 const MARGIN: f32 = 0.08;
 const VAAPI_DEVICE: &str = "/dev/dri/renderD128";
@@ -54,6 +55,7 @@ impl Layout {
 pub struct RenderOptions {
     pub zoom: f32,
     pub background: Background,
+    pub clicks: bool,
     pub end_frame: Option<usize>,
 }
 
@@ -75,6 +77,11 @@ pub fn run(
     let cameras = camera::plan(&cursor, SCENE_W as f32, SCENE_H as f32, options.zoom, FPS);
     let cursors = camera::smooth_cursor(&cursor, FPS);
     let total_frames = cursor.len();
+    let clicks = if options.clicks {
+        read_click_log(&dir.join(CLICKS_FILE))?
+    } else {
+        Vec::new()
+    };
     let background = background::load(&options.background, OUT_W, OUT_H)?;
     let compositor = Compositor::new((win_w, win_h), (OUT_W, OUT_H), &background, Output::Nv12)?;
     drop(background);
@@ -125,7 +132,8 @@ pub fn run(
     let mut rendered = 0;
     for window in decoded_rx.iter().take(end_frame) {
         let cam = cameras.get(rendered).unwrap_or(&overview);
-        let params = frame_params(&layout, cam, cursors.get(rendered).copied().flatten());
+        let mut params = frame_params(&layout, cam, cursors.get(rendered).copied().flatten());
+        params.clicks = ripples_at(rendered, &clicks, &cursor);
         let mut nv12 = free_rx.try_recv().unwrap_or_default();
         compositor.render(&window, &params, &mut nv12)?;
         let _ = spare_tx.send(window);
@@ -210,7 +218,41 @@ fn frame_params(layout: &Layout, cam: &Camera, cursor: Option<Point>) -> Params 
         window_rect: [layout.x, layout.y, layout.width, layout.height],
         cursor: cursor.map_or([0.0; 4], |(x, y)| [x, y, 1.0, 0.0]),
         sizes: [OUT_W as f32, OUT_H as f32, SCENE_W as f32, SCENE_H as f32],
+        clicks: [[0.0; 4]; 4],
     }
+}
+
+fn ripples_at(frame: usize, clicks: &[usize], cursor: &[Option<Point>]) -> [[f32; 4]; 4] {
+    let mut ripples = [[0.0; 4]; 4];
+    let active = clicks
+        .iter()
+        .rev()
+        .filter(|&&click| click <= frame && frame - click < RIPPLE_FRAMES);
+    for (ripple, &click) in ripples.iter_mut().zip(active) {
+        let position = cursor
+            .get(..=click.min(cursor.len().saturating_sub(1)))
+            .and_then(|seen| seen.iter().rev().flatten().next());
+        if let Some(&(x, y)) = position {
+            *ripple = [x, y, (frame - click) as f32 / RIPPLE_FRAMES as f32, 1.0];
+        }
+    }
+    ripples
+}
+
+fn read_click_log(path: &Path) -> Result<Vec<usize>> {
+    let text = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
+    };
+    let mut clicks = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.trim().parse::<usize>())
+        .collect::<Result<Vec<_>, _>>()
+        .with_context(|| format!("{} has an invalid frame number", path.display()))?;
+    clicks.sort_unstable();
+    Ok(clicks)
 }
 
 fn encoder_command(output: &Path) -> Command {
@@ -357,6 +399,7 @@ mod tests {
         let options = RenderOptions {
             zoom: 1.0,
             background: Background::Gradient,
+            clicks: false,
             end_frame: Some(24),
         };
         run(&dir, &output, &options, |_, _| {}).unwrap();
@@ -374,6 +417,21 @@ mod tests {
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "24");
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn ripples_follow_recent_clicks() {
+        let cursor = vec![Some((10.0, 20.0)), None, Some((30.0, 40.0)), None];
+        let ripples = ripples_at(3, &[0, 2], &cursor);
+        assert_eq!(ripples[0], [30.0, 40.0, 1.0 / RIPPLE_FRAMES as f32, 1.0]);
+        assert_eq!(ripples[1], [10.0, 20.0, 3.0 / RIPPLE_FRAMES as f32, 1.0]);
+        assert_eq!(ripples[2], [0.0; 4]);
+        assert_eq!(ripples_at(1, &[3], &cursor), [[0.0; 4]; 4]);
+        assert_eq!(ripples_at(RIPPLE_FRAMES + 5, &[0], &cursor), [[0.0; 4]; 4]);
+        assert_eq!(
+            ripples_at(5, &[3], &cursor)[0],
+            [30.0, 40.0, 2.0 / RIPPLE_FRAMES as f32, 1.0]
+        );
     }
 
     #[test]

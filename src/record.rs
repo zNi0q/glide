@@ -39,7 +39,7 @@ use pipewire::{
     stream::{StreamBox, StreamFlags, StreamState},
 };
 
-use crate::{CURSOR_FILE, FPS, SCREEN_FILE};
+use crate::{CLICKS_FILE, CURSOR_FILE, FPS, SCREEN_FILE, clicks};
 
 #[derive(Default)]
 struct Latest {
@@ -77,6 +77,7 @@ pub enum Source {
     Screen,
 }
 
+pub const NO_CLICK_ACCESS: &str = "Clicks were not recorded: glide cannot read the mouse. Run `sudo usermod -aG input $USER`, then log out and back in.";
 const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(5);
 const RECORDING_CURSOR: [CursorMode; 3] = [
     CursorMode::Metadata,
@@ -109,6 +110,7 @@ pub struct Image {
 pub struct Recording {
     pub frames: u32,
     pub cursor_frames: u32,
+    pub clicks: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -150,6 +152,10 @@ pub fn run_cli(dir: &Path) -> Result<()> {
         eprintln!(
             "warning: the compositor reported no cursor positions, so no cursor will be drawn"
         );
+    }
+    match recording.clicks {
+        Some(count) => println!("Recorded {count} clicks"),
+        None => eprintln!("{NO_CLICK_ACCESS}"),
     }
     Ok(())
 }
@@ -284,18 +290,35 @@ fn capture(dir: &Path, node_id: u32, fd: OwnedFd, stop_signal: StopSignal) -> Re
         thread::spawn(move || write_frames(&dir, &latest, &stop))
     };
 
+    let listener = clicks::listen();
     let streamed = stream_window(node_id, fd, latest, stop_signal);
     stop.store(true, Ordering::Relaxed);
-    let (frames, cursor_frames) = writer.join().expect("writer thread panicked")?;
+    let (frames, cursor_frames, start) = writer.join().expect("writer thread panicked")?;
+    let click_times = listener.map(clicks::ClickListener::finish);
     streamed?;
 
     if frames == 0 {
         bail!("no frames were captured");
     }
+    let clicks = match (click_times, start) {
+        (Some(times), Some(start)) => Some(write_click_log(dir, start, &times)?),
+        _ => None,
+    };
     Ok(Recording {
         frames,
         cursor_frames,
+        clicks,
     })
+}
+
+pub fn write_click_log(dir: &Path, start: Instant, times: &[Instant]) -> Result<usize> {
+    let frames: Vec<String> = times
+        .iter()
+        .filter_map(|time| time.checked_duration_since(start))
+        .map(|offset| ((offset.as_secs_f64() * f64::from(FPS)) as u64).to_string())
+        .collect();
+    std::fs::write(dir.join(CLICKS_FILE), frames.join("\n") + "\n")?;
+    Ok(frames.len())
 }
 
 fn stream_window(
@@ -422,10 +445,14 @@ fn store_buffer(
     }
 }
 
-fn write_frames(dir: &Path, latest: &Mutex<Latest>, stop: &AtomicBool) -> Result<(u32, u32)> {
+fn write_frames(
+    dir: &Path,
+    latest: &Mutex<Latest>,
+    stop: &AtomicBool,
+) -> Result<(u32, u32, Option<Instant>)> {
     let (width, height, pix_fmt) = loop {
         if stop.load(Ordering::Relaxed) {
-            return Ok((0, 0));
+            return Ok((0, 0, None));
         }
         if let Some(f) = &latest.lock().expect("capture state poisoned").frame {
             break (f.width, f.height, f.pix_fmt);
@@ -489,7 +516,7 @@ fn write_frames(dir: &Path, latest: &Mutex<Latest>, stop: &AtomicBool) -> Result
     if !status.success() {
         bail!("ffmpeg failed with {status}");
     }
-    Ok((frames, cursor_frames))
+    Ok((frames, cursor_frames, Some(start)))
 }
 
 fn copy_cropped(frame: &Frame, image: &mut [u8], width: usize, height: usize) {

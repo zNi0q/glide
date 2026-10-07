@@ -3,6 +3,7 @@ struct Params {
     window_rect: vec4f,
     cursor: vec4f,
     sizes: vec4f,
+    clicks: array<vec4f, 4>,
 }
 
 @group(0) @binding(0) var<uniform> params: Params;
@@ -27,6 +28,9 @@ const ARROW: array<vec2f, 7> = array<vec2f, 7>(
 const ARROW_HEIGHT: f32 = 19.0;
 const CURSOR_HEIGHT: f32 = 30.0;
 const CURSOR_OUTLINE: f32 = 1.2;
+const RIPPLE_START: f32 = 6.0;
+const RIPPLE_GROWTH: f32 = 30.0;
+const RIPPLE_RING: f32 = 2.2;
 
 fn window_distance(scene: vec2f) -> f32 {
     let half_size = params.window_rect.zw * 0.5;
@@ -70,6 +74,20 @@ fn color_at(pixel: vec2f) -> vec3f {
         let uv = (scene - params.window_rect.xy) / params.window_rect.zw;
         let window = textureSampleLevel(window_texture, linear_sampler, uv, 0.0).rgb;
         color = mix(color, window, coverage);
+    }
+
+    for (var i = 0u; i < 4u; i++) {
+        let click = params.clicks[i];
+        if click.w > 0.0 {
+            let center = (click.xy - params.camera.xy) * px_per_unit + half_output;
+            let grow = 1.0 - pow(1.0 - click.z, 3.0);
+            let radius = (RIPPLE_START + RIPPLE_GROWTH * grow) * px_per_unit;
+            let fade = pow(1.0 - click.z, 2.0);
+            let distance = length(pixel - center);
+            let ring = 1.0 - smoothstep(0.0, RIPPLE_RING * px_per_unit, abs(distance - radius));
+            let fill = 1.0 - smoothstep(radius - px_per_unit, radius + px_per_unit, distance);
+            color = mix(color, vec3f(1.0), clamp(fade * (0.85 * ring + 0.22 * fill), 0.0, 1.0));
+        }
     }
 
     if params.cursor.z > 0.0 {
