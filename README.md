@@ -9,8 +9,9 @@ turns it into a 4K video with the window centered on your wallpaper, rounded
 corners, a smooth redrawn cursor, and an optional camera that zooms in and
 follows your cursor. Screenshots get the same treatment as a 4K PNG.
 
-It is inspired by macOS tools like Screen Studio and works on Wayland desktops:
-KDE Plasma, GNOME, COSMIC, Hyprland, Sway and other wlroots compositors.
+It is inspired by macOS tools like Screen Studio and works on Linux desktops,
+on both Wayland (KDE Plasma, GNOME, COSMIC, Hyprland, Sway and other wlroots
+compositors) and X11.
 
 ## Features
 
@@ -25,6 +26,8 @@ KDE Plasma, GNOME, COSMIC, Hyprland, Sway and other wlroots compositors.
   roams or rests.
 - **Polished screenshots.** Capture a window or the whole screen as a 4K
   PNG, framed the same way as the videos.
+- **Click effects (opt-in).** A soft ripple marks every click and touchpad
+  tap.
 - **Smooth cursor.** The real cursor is hidden while recording and redrawn
   afterwards as a crisp, smoothed arrow at any zoom level.
 - **4K output, rendered on the GPU.** Compositing runs in a wgpu compute
@@ -36,8 +39,10 @@ KDE Plasma, GNOME, COSMIC, Hyprland, Sway and other wlroots compositors.
 
 ## Requirements
 
-- Linux with a Wayland session.
-- PipeWire and `xdg-desktop-portal` with the backend for your desktop:
+- Linux with a Wayland or X11 session. On X11, a compositing window manager
+  is needed for the glass toolbar.
+- On Wayland, PipeWire and `xdg-desktop-portal` with the backend for your
+  desktop:
 
   | Desktop | Portal backend |
   | --- | --- |
@@ -124,10 +129,16 @@ On KDE Plasma, COSMIC, Hyprland, Sway and other compositors with layer-shell,
 the toolbar floats above all windows. GNOME has no layer-shell, so there the
 toolbar opens as a small borderless window that you drag like any window.
 
-1. Choose **Window** or **Screen**, a **Zoom** level and a **Background**.
-2. Press **Record** and pick what to record in the system dialog.
+1. Choose **Window** or **Screen**, then **Effects** (cursor zoom and click
+   ripples) and a **Background**.
+2. Press **Record** and pick what to record: in the system dialog on Wayland,
+   or by clicking the window on X11 (Esc cancels).
 3. Press **■** in the recording pill to stop.
 4. glide renders the video and shows **Open** and **Show in folder**.
+
+While recording the whole screen, the pill is invisible so it never appears
+in your video. Move the pointer to where it was (bottom center by default)
+and it fades in. glide cuts the video just before the pill appeared.
 
 Press **Screenshot** instead of Record to capture a single polished image.
 
@@ -171,6 +182,21 @@ glide render myvideo -o myvideo.mp4 --background ~/Pictures/backdrop.jpg
 | `-o, --output <file>` | Output video (default `glide.mp4`). |
 | `--zoom [factor]` | Follow the cursor with zoom, up to `factor` (1 to 4, default 1.8). Without it the video is not zoomed. |
 | `--background <image>` | Use an image behind the window instead of your desktop wallpaper. |
+| `--clicks` | Draw a ripple wherever you clicked. |
+
+### Click effects
+
+glide records every click while recording, and draws ripples when the click
+effect is turned on. On X11 this works out of the box. On Wayland, apps are not
+allowed to see clicks in other windows, so glide reads the mouse device
+directly. That needs your user in the `input` group, once:
+
+```sh
+sudo usermod -aG input $USER
+```
+
+Then log out and back in. Note that members of `input` can also read keyboard
+input; glide only opens mouse and touchpad devices.
 
 Take a screenshot of a window, or of the whole screen with `--screen`:
 
@@ -190,11 +216,16 @@ render:  ffmpeg decode ─► GPU compute shader ─► NV12 ─► VAAPI H.264 
                           (wallpaper, rounded window, camera, cursor)
 
 screenshot: portal ─► one PipeWire frame ─► GPU compute shader ─► RGBA ─► png
+
+X11:     Composite window pixmap / root window ─► same files and pipeline
 ```
 
 - `src/record.rs` talks to the ScreenCast portal and PipeWire. The cursor is
   requested as metadata, so frames are recorded without it and its position
   is logged separately.
+- `src/x11.rs` captures on X11 through the Composite extension and reads
+  clicks with XInput2. `src/clicks.rs` reads clicks from mouse and touchpad
+  devices on Wayland.
 - `src/camera.rs` plans the camera offline with look-ahead and smooths every
   move with critically damped springs.
 - `src/composite.wgsl` and `src/gpu.rs` composite each frame on the GPU and
@@ -202,15 +233,17 @@ screenshot: portal ─► one PipeWire frame ─► GPU compute shader ─► RG
 - `src/render.rs` pipelines decoding, compositing and encoding on separate
   threads.
 - `src/ui/` is the toolbar, drawn with egui and wgpu: a full-screen
-  click-through layer-shell surface, or a borderless window where layer-shell
-  is missing. Blur comes from the standard `ext-background-effect` protocol or
-  KDE's blur protocol, whichever the compositor offers.
+  click-through layer-shell surface, a borderless window where layer-shell is
+  missing, or a shaped override-redirect window on X11. Blur comes from the
+  standard `ext-background-effect` protocol or KDE's blur protocols, whichever
+  the desktop offers.
 
 ## Limitations
 
-- Wayland only. X11 sessions are not supported.
-- Developed and tested on KDE Plasma 6. Other desktops use the same standard
-  portals and protocols but have not been tested by the author yet.
+- Developed and tested on KDE Plasma 6 (Wayland). X11 support is tested under
+  XWayland; other desktops use the same standard portals and protocols but
+  have not been tested by the author yet.
+- On Wayland, click effects need the `input` group (see Click effects).
 - Without background blur support (for example on GNOME), the toolbar glass
   is tinted but not blurred.
 - If a desktop's portal cannot report the cursor separately, the cursor is
