@@ -30,6 +30,15 @@ pub struct ClickListener {
 }
 
 impl ClickListener {
+    pub(crate) fn spawn(read: impl FnOnce(&AtomicBool) -> Vec<Instant> + Send + 'static) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let handle = {
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || read(&stop))
+        };
+        Self { stop, handle }
+    }
+
     pub fn finish(self) -> Vec<Instant> {
         self.stop.store(true, Ordering::Relaxed);
         self.handle.join().unwrap_or_default()
@@ -37,7 +46,7 @@ impl ClickListener {
 }
 
 pub fn available() -> bool {
-    !open_pointer_devices().is_empty()
+    crate::x11::is_session() || !open_pointer_devices().is_empty()
 }
 
 pub fn listen() -> Option<ClickListener> {
@@ -45,12 +54,7 @@ pub fn listen() -> Option<ClickListener> {
     if devices.is_empty() {
         return None;
     }
-    let stop = Arc::new(AtomicBool::new(false));
-    let handle = {
-        let stop = Arc::clone(&stop);
-        thread::spawn(move || read_clicks(devices, &stop))
-    };
-    Some(ClickListener { stop, handle })
+    Some(ClickListener::spawn(move |stop| read_clicks(devices, stop)))
 }
 
 fn open_pointer_devices() -> Vec<File> {

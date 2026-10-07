@@ -6,6 +6,7 @@ mod record;
 mod render;
 mod ui;
 mod update;
+mod x11;
 
 use std::{
     io::{self, Write},

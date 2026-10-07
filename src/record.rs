@@ -39,23 +39,23 @@ use pipewire::{
     stream::{StreamBox, StreamFlags, StreamState},
 };
 
-use crate::{CLICKS_FILE, CURSOR_FILE, FPS, SCREEN_FILE, clicks};
+use crate::{CLICKS_FILE, CURSOR_FILE, FPS, SCREEN_FILE, clicks, x11};
 
 #[derive(Default)]
-struct Latest {
-    frame: Option<Frame>,
-    cursor: Option<(f32, f32)>,
+pub(crate) struct Latest {
+    pub(crate) frame: Option<Frame>,
+    pub(crate) cursor: Option<(f32, f32)>,
 }
 
-struct Frame {
-    width: usize,
-    height: usize,
-    pix_fmt: &'static str,
-    data: Vec<u8>,
+pub(crate) struct Frame {
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) pix_fmt: &'static str,
+    pub(crate) data: Vec<u8>,
 }
 
 impl Frame {
-    fn into_image(mut self) -> Image {
+    pub(crate) fn into_image(mut self) -> Image {
         let swap_red_blue = self.pix_fmt.starts_with("bgr");
         for pixel in self.data.as_chunks_mut::<4>().0 {
             if swap_red_blue {
@@ -114,19 +114,39 @@ pub struct Recording {
 }
 
 #[derive(Clone)]
-pub struct StopHandle(pw::channel::Sender<()>);
+pub struct StopHandle {
+    sender: pw::channel::Sender<()>,
+    stopped: Arc<AtomicBool>,
+}
 
-pub struct StopSignal(pw::channel::Receiver<()>);
+pub struct StopSignal {
+    receiver: pw::channel::Receiver<()>,
+    stopped: Arc<AtomicBool>,
+}
 
 impl StopHandle {
     pub fn stop(&self) {
-        let _ = self.0.send(());
+        self.stopped.store(true, Ordering::Relaxed);
+        let _ = self.sender.send(());
+    }
+}
+
+impl StopSignal {
+    pub(crate) fn is_stopped(&self) -> bool {
+        self.stopped.load(Ordering::Relaxed)
     }
 }
 
 pub fn stop_channel() -> (StopHandle, StopSignal) {
     let (sender, receiver) = pw::channel::channel();
-    (StopHandle(sender), StopSignal(receiver))
+    let stopped = Arc::new(AtomicBool::new(false));
+    (
+        StopHandle {
+            sender,
+            stopped: Arc::clone(&stopped),
+        },
+        StopSignal { receiver, stopped },
+    )
 }
 
 pub fn run_cli(dir: &Path) -> Result<()> {
@@ -167,13 +187,35 @@ pub fn record(
     on_start: impl FnOnce(),
 ) -> Result<Recording> {
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    with_stream(source, &RECORDING_CURSOR, |node_id, fd| {
-        on_start();
-        capture(dir, node_id, fd, stop)
+    if x11::is_session() {
+        record_x11(dir, source, stop, on_start)
+    } else {
+        with_stream(source, &RECORDING_CURSOR, |node_id, fd| {
+            on_start();
+            capture(dir, clicks::listen(), |latest| {
+                stream_window(node_id, fd, latest, stop)
+            })
+        })
+    }
+}
+
+fn record_x11(
+    dir: &Path,
+    source: Source,
+    stop: StopSignal,
+    on_start: impl FnOnce(),
+) -> Result<Recording> {
+    let target = x11::Target::choose(source)?;
+    on_start();
+    capture(dir, x11::listen_clicks(), |latest| {
+        target.stream(&latest, &stop)
     })
 }
 
 pub fn screenshot(source: Source) -> Result<Image> {
+    if x11::is_session() {
+        return x11::Target::choose(source)?.snapshot();
+    }
     with_stream(source, &SCREENSHOT_CURSOR, |node_id, fd| {
         let latest = Arc::new(Mutex::new(Latest::default()));
         let (stop, signal) = stop_channel();
@@ -282,7 +324,11 @@ async fn open_portal(
     Ok((proxy, session, node_id, fd))
 }
 
-fn capture(dir: &Path, node_id: u32, fd: OwnedFd, stop_signal: StopSignal) -> Result<Recording> {
+fn capture(
+    dir: &Path,
+    listener: Option<clicks::ClickListener>,
+    produce: impl FnOnce(Arc<Mutex<Latest>>) -> Result<()>,
+) -> Result<Recording> {
     let latest = Arc::new(Mutex::new(Latest::default()));
     let stop = Arc::new(AtomicBool::new(false));
     let writer = {
@@ -290,8 +336,7 @@ fn capture(dir: &Path, node_id: u32, fd: OwnedFd, stop_signal: StopSignal) -> Re
         thread::spawn(move || write_frames(&dir, &latest, &stop))
     };
 
-    let listener = clicks::listen();
-    let streamed = stream_window(node_id, fd, latest, stop_signal);
+    let streamed = produce(latest);
     stop.store(true, Ordering::Relaxed);
     let (frames, cursor_frames, start) = writer.join().expect("writer thread panicked")?;
     let click_times = listener.map(clicks::ClickListener::finish);
@@ -341,7 +386,7 @@ fn stream_window(
         },
     )?;
 
-    let _stop = stop_signal.0.attach(mainloop.loop_(), {
+    let _stop = stop_signal.receiver.attach(mainloop.loop_(), {
         let mainloop = mainloop.clone();
         move |()| mainloop.quit()
     });

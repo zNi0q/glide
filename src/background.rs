@@ -78,6 +78,11 @@ fn desktop_wallpaper() -> Option<PathBuf> {
                     .and_then(parse_swaybg),
             )
         })
+        .or_else(|| image_from(home_file(".fehbg").as_deref().and_then(parse_feh)))
+        .or_else(|| {
+            let config = fs::read_to_string(config_dir()?.join("nitrogen/bg-saved.cfg")).ok()?;
+            image_from(parse_nitrogen(&config))
+        })
 }
 
 fn image_from(path: Option<&str>) -> Option<PathBuf> {
@@ -151,6 +156,23 @@ fn parse_swww(output: &str) -> Option<&str> {
     output
         .lines()
         .find_map(|line| line.split_once("image: ").map(|(_, path)| path.trim()))
+}
+
+fn home_file(name: &str) -> Option<String> {
+    fs::read_to_string(PathBuf::from(env::var_os("HOME")?).join(name)).ok()
+}
+
+fn parse_feh(script: &str) -> Option<&str> {
+    let line = script
+        .lines()
+        .find(|line| line.trim_start().starts_with("feh "))?;
+    let end = line.rfind('\'')?;
+    let start = line[..end].rfind('\'')? + 1;
+    Some(&line[start..end])
+}
+
+fn parse_nitrogen(config: &str) -> Option<&str> {
+    config.lines().find_map(|line| line.strip_prefix("file="))
 }
 
 fn parse_swaybg(output: &str) -> Option<&str> {
@@ -299,6 +321,10 @@ mod tests {
             Some("/home/a/w.jpg")
         );
         assert_eq!(parse_swaybg("4242 swaybg -c #000000"), None);
+        let fehbg = "#!/bin/sh\nfeh --no-fehbg --bg-fill '/home/a/My Walls/w.jpg' \n";
+        assert_eq!(parse_feh(fehbg), Some("/home/a/My Walls/w.jpg"));
+        let nitrogen = "[xin_-1]\nfile=/home/a/w.png\nmode=5\nbgcolor=#000000\n";
+        assert_eq!(parse_nitrogen(nitrogen), Some("/home/a/w.png"));
     }
 
     #[test]
