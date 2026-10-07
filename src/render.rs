@@ -51,24 +51,31 @@ impl Layout {
     }
 }
 
+pub struct RenderOptions {
+    pub zoom: f32,
+    pub background: Background,
+    pub end_frame: Option<usize>,
+}
+
 pub fn run(
     dir: &Path,
     output: &Path,
-    max_zoom: f32,
-    background: &Background,
+    options: &RenderOptions,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<()> {
     let screen = dir.join(SCREEN_FILE);
     let (win_w, win_h) = probe_size(&screen)?;
     let layout = Layout::new(win_w, win_h);
-    let cursor: Vec<Option<Point>> = read_cursor_log(&dir.join(CURSOR_FILE))?
+    let mut cursor: Vec<Option<Point>> = read_cursor_log(&dir.join(CURSOR_FILE))?
         .into_iter()
         .map(|p| p.map(|p| layout.to_scene(p)))
         .collect();
-    let cameras = camera::plan(&cursor, SCENE_W as f32, SCENE_H as f32, max_zoom, FPS);
+    let end_frame = options.end_frame.unwrap_or(usize::MAX);
+    cursor.truncate(end_frame);
+    let cameras = camera::plan(&cursor, SCENE_W as f32, SCENE_H as f32, options.zoom, FPS);
     let cursors = camera::smooth_cursor(&cursor, FPS);
     let total_frames = cursor.len();
-    let background = background::load(background, OUT_W, OUT_H)?;
+    let background = background::load(&options.background, OUT_W, OUT_H)?;
     let compositor = Compositor::new((win_w, win_h), (OUT_W, OUT_H), &background, Output::Nv12)?;
     drop(background);
 
@@ -116,7 +123,7 @@ pub fn run(
 
     let overview = overview();
     let mut rendered = 0;
-    for window in decoded_rx {
+    for window in decoded_rx.iter().take(end_frame) {
         let cam = cameras.get(rendered).unwrap_or(&overview);
         let params = frame_params(&layout, cam, cursors.get(rendered).copied().flatten());
         let mut nv12 = free_rx.try_recv().unwrap_or_default();
@@ -129,6 +136,7 @@ pub fn run(
         progress(rendered, total_frames.max(rendered));
     }
 
+    drop(decoded_rx);
     drop(frame_tx);
     reader.join().expect("reader thread panicked")?;
     writer.join().expect("writer thread panicked")?;
@@ -329,6 +337,43 @@ mod tests {
             "png,3840,2160"
         );
         fs::remove_file(output).unwrap();
+    }
+
+    #[test]
+    #[ignore = "needs a GPU and ffmpeg"]
+    fn render_stops_at_the_end_frame() {
+        let dir = std::env::temp_dir().join("glide-end-frame-test");
+        fs::create_dir_all(&dir).unwrap();
+        let generated = Command::new("ffmpeg")
+            .args(["-loglevel", "error", "-y", "-f", "lavfi"])
+            .args(["-i", "testsrc2=size=320x200:rate=60:duration=1"])
+            .args(["-c:v", "libx264rgb", "-crf", "0"])
+            .arg(dir.join(SCREEN_FILE))
+            .status()
+            .unwrap();
+        assert!(generated.success());
+        fs::write(dir.join(CURSOR_FILE), "10 10\n".repeat(60)).unwrap();
+        let output = dir.join("out.mp4");
+        let options = RenderOptions {
+            zoom: 1.0,
+            background: Background::Gradient,
+            end_frame: Some(24),
+        };
+        run(&dir, &output, &options, |_, _| {}).unwrap();
+        let probe = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-count_frames",
+                "-show_entries",
+                "stream=nb_read_frames",
+            ])
+            .args(["-of", "csv=p=0"])
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "24");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -12,7 +12,7 @@ use ashpd::desktop::file_chooser::{FileFilter, SelectedFiles};
 use crate::{
     background::{Background, path_from_uri},
     record::{self, Cancelled, Source, StopHandle},
-    render,
+    render::{self, RenderOptions},
     update::{self, Release},
 };
 
@@ -56,11 +56,11 @@ pub fn start_recording(source: Source, events: Sender<Event>) -> StopHandle {
     stop
 }
 
-pub fn start_render(dir: PathBuf, zoom: f32, background: Background, events: Sender<Event>) {
+pub fn start_render(dir: PathBuf, options: RenderOptions, events: Sender<Event>) {
     thread::spawn(move || {
         let progress = events.clone();
         let result = output_path(&dir).and_then(|output| {
-            render::run(&dir, &output, zoom, &background, |done, total| {
+            render::run(&dir, &output, &options, |done, total| {
                 let _ = progress.send(Event::RenderProgress(done, total));
             })?;
             Ok(output)

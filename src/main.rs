@@ -112,18 +112,16 @@ fn main() -> Result<()> {
             zoom,
             background,
         } => {
-            let background = background.map_or(Background::Wallpaper, Background::Image);
-            render::run(
-                &dir,
-                &output,
-                zoom.unwrap_or(1.0),
-                &background,
-                |done, total| {
-                    if done % FPS as usize == 0 || done == total {
-                        eprint!("\rRendered {done}/{total} frames");
-                    }
-                },
-            )?;
+            let options = render::RenderOptions {
+                zoom: zoom.unwrap_or(1.0),
+                background: background.map_or(Background::Wallpaper, Background::Image),
+                end_frame: None,
+            };
+            render::run(&dir, &output, &options, |done, total| {
+                if done % FPS as usize == 0 || done == total {
+                    eprint!("\rRendered {done}/{total} frames");
+                }
+            })?;
             eprintln!();
             println!("Wrote {}", output.display());
             Ok(())

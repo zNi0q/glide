@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
     process::Command,
     sync::mpsc::{self, Receiver, Sender},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use egui::{
@@ -18,8 +18,10 @@ use super::{
     jobs::{self, Event},
 };
 use crate::{
+    FPS,
     background::Background,
     record::{Source, StopHandle},
+    render::RenderOptions,
     update::{Release, Version},
 };
 
@@ -35,6 +37,8 @@ const ICON_STROKE: f32 = 1.7;
 const TEXT: Color32 = Color32::WHITE;
 const MUTED: Color32 = Color32::from_rgba_premultiplied(179, 179, 179, 179);
 const RECORD_RED: Color32 = Color32::from_rgb(240, 69, 59);
+const REVEAL_SPEED: f32 = 14.0;
+const REVEAL_MARGIN: Duration = Duration::from_millis(150);
 const LEAD_OMEGA: f32 = 26.0;
 const TRAIL_OMEGA: f32 = 13.0;
 const LIQUID_DAMPING: f32 = 0.68;
@@ -50,9 +54,18 @@ enum Phase {
     Toolbar,
     Picking(StopHandle),
     Capturing,
-    Recording { since: Instant, stop: StopHandle },
-    Finishing,
-    Rendering { done: usize, total: usize },
+    Recording {
+        since: Instant,
+        stop: StopHandle,
+        revealed_at: Option<Instant>,
+    },
+    Finishing {
+        end: Option<Duration>,
+    },
+    Rendering {
+        done: usize,
+        total: usize,
+    },
     Done(PathBuf),
     Failed(String),
 }
@@ -106,6 +119,7 @@ pub struct Toolbar {
     window_mode: bool,
     move_requested: bool,
     update: Update,
+    reveal: f32,
     pub regions: Vec<(Rect, f32)>,
     pub quit: bool,
 }
@@ -130,6 +144,7 @@ impl Toolbar {
             window_mode,
             move_requested: false,
             update: Update::Hidden,
+            reveal: 0.0,
             regions: Vec::new(),
             quit: false,
         }
@@ -156,6 +171,7 @@ impl Toolbar {
 
     fn set_phase(&mut self, phase: Phase) {
         self.phase = phase;
+        self.reveal = 0.0;
         self.phase_since = Instant::now();
         self.menu = None;
     }
@@ -170,16 +186,21 @@ impl Toolbar {
                         self.set_phase(Phase::Recording {
                             since: Instant::now(),
                             stop,
+                            revealed_at: None,
                         });
                     }
                 }
                 Event::RecordingFinished(Ok(dir)) => {
-                    jobs::start_render(
-                        dir,
-                        self.zoom.unwrap_or(1.0),
-                        self.background.clone(),
-                        self.events.clone(),
-                    );
+                    let end = match self.phase {
+                        Phase::Finishing { end } => end,
+                        _ => None,
+                    };
+                    let options = RenderOptions {
+                        zoom: self.zoom.unwrap_or(1.0),
+                        background: self.background.clone(),
+                        end_frame: end.map(|end| (end.as_secs_f32() * FPS as f32) as usize),
+                    };
+                    jobs::start_render(dir, options, self.events.clone());
                     self.set_phase(Phase::Rendering { done: 0, total: 0 });
                 }
                 Event::RecordingFinished(Err(e)) | Event::ScreenshotFinished(Err(e)) => {
@@ -226,6 +247,7 @@ impl Toolbar {
 
         match &self.phase {
             Phase::Toolbar => self.toolbar(ui, &painter, &mut glass, screen, lift, entrance),
+            Phase::Picking(_) if self.source == Source::Screen => {}
             Phase::Picking(_) | Phase::Capturing => {
                 let text = match self.source {
                     Source::Window => "Pick a window in the dialog…",
@@ -233,7 +255,7 @@ impl Toolbar {
                 };
                 self.waiting(ui, &painter, &mut glass, screen, lift, entrance, text);
             }
-            Phase::Finishing => {
+            Phase::Finishing { .. } => {
                 self.waiting(
                     ui,
                     &painter,
@@ -821,6 +843,21 @@ impl Toolbar {
             50.0,
             lift,
         );
+        let hidden_in_video = self.source == Source::Screen;
+        let shown = !hidden_in_video || ui.rect_contains_pointer(pill);
+        let target = if shown { 1.0 } else { 0.0 };
+        self.reveal += (target - self.reveal) * (1.0 - (-self.dt * REVEAL_SPEED).exp());
+        if hidden_in_video && let Phase::Recording { revealed_at, .. } = &mut self.phase {
+            if self.reveal > 0.01 {
+                revealed_at.get_or_insert_with(Instant::now);
+            } else {
+                *revealed_at = None;
+            }
+        }
+        let mut painter = painter.clone();
+        painter.multiply_opacity(self.reveal);
+        let painter = &painter;
+        let opacity = opacity * self.reveal;
         glass.paint(painter, pill, 25.0, opacity);
 
         let dot = pos2(pill.left() + 16.0 + 5.0, pill.center().y);
@@ -863,10 +900,16 @@ impl Toolbar {
             TEXT,
         );
         if response.clicked()
-            && let Phase::Recording { stop, .. } = &self.phase
+            && let Phase::Recording {
+                stop, revealed_at, ..
+            } = &self.phase
         {
             stop.stop();
-            self.set_phase(Phase::Finishing);
+            let end = revealed_at.map(|at| {
+                at.saturating_duration_since(since)
+                    .saturating_sub(REVEAL_MARGIN)
+            });
+            self.set_phase(Phase::Finishing { end });
         }
     }
 
