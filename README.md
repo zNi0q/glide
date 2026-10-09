@@ -274,6 +274,13 @@ follows, then commit and push. When the workflow sees a version without a
 release, it tags it, builds x86_64 and aarch64 archives, and publishes them.
 Installed copies of glide then offer the update.
 
+The documentation site lives in `docs/`. Its styles are written in SCSS under
+`docs/scss` and compiled with Dart Sass:
+
+```sh
+cd docs && pnpm install && pnpm build
+```
+
 `design/toolbar-preview.html` is an interactive mockup of the toolbar styles.
 Open it in a browser, optionally with `?wallpaper=file:///path/to/image.jpg`.
 
