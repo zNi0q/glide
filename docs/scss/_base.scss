@@ -1,0 +1,138 @@
+@use "tokens" as *;
+
+:root {
+  @include theme-vars("light");
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include theme-vars("dark");
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  @include theme-vars("dark");
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: $topbar-height + 24px;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: $font-sans;
+  font-size: 16.5px;
+  line-height: 1.68;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: $font-display;
+  font-optical-sizing: auto;
+  line-height: 1.08;
+  margin: 0;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-bottom: 0.55em;
+}
+
+h3 {
+  font-size: 1.18rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 2.2em 0 0.6em;
+}
+
+p {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+    border-radius: 4px;
+  }
+}
+
+code,
+kbd,
+pre {
+  font-family: $font-mono;
+  font-size: 0.86em;
+  font-variant-ligatures: none;
+}
+
+:not(pre) > code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.02em 0.42em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.8em;
+  text-align: center;
+}
+
+ul,
+ol {
+  padding-left: 1.25em;
+  margin: 0 0 1em;
+}
+
+li + li {
+  margin-top: 0.35em;
+}
+
+::selection {
+  background: color("iris");
+  color: #fff;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}

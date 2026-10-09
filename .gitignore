@@ -5,3 +5,4 @@
 *.png
 cursor.txt
 !assets/*.png
+/docs/node_modules

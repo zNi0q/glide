@@ -1,0 +1,378 @@
+@use "sass:list";
+@use "sass:math";
+@use "tokens" as *;
+
+$loop: 11s;
+$margin: 8%;
+$zoom: 1.7;
+$pan-limit: math.div(50%, 1) - math.div(50%, $zoom);
+$window: 100% - 2 * $margin;
+$bar: 0.075;
+$tools: 0.1;
+$code: 1 - $bar - $tools;
+$code-pad: 0.06;
+$line-height: 0.095;
+$target-line: 4;
+$rest: (28%, 74%);
+$build: (73%, $margin + $window * ($bar + $tools * 0.5));
+$line: (
+  41%,
+  $margin + $window * ($bar + $tools + $code * ($code-pad + $line-height * ($target-line + 0.5)))
+);
+
+@function in-window($point) {
+  $x: list.nth($point, 1);
+  $y: list.nth($point, 2);
+  @return (
+    math.div($x - $margin, 100% - 2 * $margin) * 100%,
+    math.div($y - $margin, 100% - 2 * $margin) * 100%
+  );
+}
+
+@function pan($point) {
+  $x: 50% - list.nth($point, 1);
+  $y: 50% - list.nth($point, 2);
+  @return (
+    math.clamp(-$pan-limit, $x, $pan-limit),
+    math.clamp(-$pan-limit, $y, $pan-limit)
+  );
+}
+
+@mixin at($point) {
+  left: list.nth($point, 1);
+  top: list.nth($point, 2);
+}
+
+@mixin camera-on($point) {
+  transform: scale($zoom) translate(list.nth(pan($point), 1), list.nth(pan($point), 2));
+}
+
+.stage {
+  margin: 0;
+  container-type: inline-size;
+
+  &__screen {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: $radius-lg;
+    @include wallpaper;
+    box-shadow:
+      0 40px 120px -30px rgba(91, 42, 154, 0.55),
+      0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  &__wallpaper {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  &__camera {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 50%;
+    animation: camera $loop infinite;
+  }
+
+  &__cursor {
+    position: absolute;
+    width: 2.1cqw;
+    margin: -0.15cqw 0 0 -0.2cqw;
+    filter: drop-shadow(0 0.15cqw 0.25cqw rgba(0, 0, 0, 0.35));
+    animation: cursor $loop infinite;
+    @include at($rest);
+  }
+
+  &__ripple {
+    position: absolute;
+    width: 7cqw;
+    aspect-ratio: 1;
+    margin: -3.5cqw 0 0 -3.5cqw;
+    border-radius: 50%;
+    border: 0.22cqw solid rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.18);
+    opacity: 0;
+    transform: scale(0.2);
+
+    &--build {
+      @include at($build);
+      animation: ripple-build $loop infinite;
+    }
+
+    &--line {
+      @include at($line);
+      animation: ripple-line $loop infinite;
+    }
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px 16px;
+    margin-top: 14px;
+    font-family: $font-mono;
+    font-size: 0.8rem;
+    color: rgba(232, 234, 246, 0.6);
+  }
+
+  &__file {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(232, 234, 246, 0.85);
+
+    &::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: color("signal");
+      box-shadow: 0 0 0 4px rgba(240, 69, 59, 0.18);
+    }
+  }
+}
+
+.app {
+  position: absolute;
+  inset: $margin;
+  display: grid;
+  grid-template-rows: math.percentage($bar) math.percentage($tools) 1fr;
+  overflow: hidden;
+  border-radius: 1.1cqw;
+  background: #fbfbfe;
+  color: #2a2e45;
+  font-family: $font-sans;
+  font-size: 1.2cqw;
+  box-shadow: 0 2.2cqw 4.4cqw -1cqw rgba(12, 6, 40, 0.55);
+
+  &__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.4cqw;
+    background: #eef0f7;
+    border-bottom: 1px solid #e0e3ee;
+    font-weight: 600;
+    color: #5d6380;
+  }
+
+  &__controls {
+    display: flex;
+    gap: 0.8cqw;
+
+    i {
+      width: 0.95cqw;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #c9cde0;
+    }
+  }
+
+  &__tools {
+    position: relative;
+    border-bottom: 1px solid #eceef6;
+  }
+
+  &__tab {
+    position: absolute;
+    left: 2cqw;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: $font-mono;
+    color: #7a80a0;
+  }
+
+  &__button {
+    position: absolute;
+    left: list.nth(in-window($build), 1);
+    top: 50%;
+    transform: translate(-50%, -50%);
+    padding: 0.55cqw 1.5cqw;
+    border-radius: 0.7cqw;
+    background: color("cobalt");
+    color: #fff;
+    font-weight: 700;
+    white-space: nowrap;
+    animation: press $loop infinite;
+  }
+
+  &__code {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 2cqw;
+    font-family: $font-mono;
+    font-size: 1.12cqw;
+    color: #3a3f5c;
+    font-variant-ligatures: none;
+
+    &::before {
+      content: "";
+      flex: 0 0 math.percentage($code-pad);
+    }
+  }
+
+  &__line {
+    display: flex;
+    align-items: center;
+    flex: 0 0 math.percentage($line-height);
+    padding-left: 0.6cqw;
+    border-radius: 0.4cqw;
+    white-space: pre;
+
+    &--target {
+      animation: highlight $loop infinite;
+    }
+  }
+
+  .k {
+    color: color("iris");
+    font-weight: 600;
+  }
+
+  .f {
+    color: color("cobalt");
+  }
+
+  .s {
+    color: color("orchid");
+  }
+
+  .c {
+    color: #9aa0bd;
+  }
+}
+
+@keyframes camera {
+  0%,
+  14% {
+    transform: none;
+    animation-timing-function: $ease-glide;
+  }
+  36%,
+  46% {
+    @include camera-on($build);
+    animation-timing-function: $ease-glide;
+  }
+  62%,
+  70% {
+    @include camera-on($line);
+    animation-timing-function: $ease-glide;
+  }
+  88%,
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes cursor {
+  0%,
+  12% {
+    @include at($rest);
+    transform: none;
+    animation-timing-function: $ease-glide;
+  }
+  31% {
+    @include at($build);
+    transform: none;
+  }
+  33% {
+    transform: scale(0.85);
+  }
+  35%,
+  46% {
+    @include at($build);
+    transform: none;
+    animation-timing-function: $ease-glide;
+  }
+  57% {
+    @include at($line);
+    transform: none;
+  }
+  59% {
+    transform: scale(0.85);
+  }
+  61%,
+  72% {
+    @include at($line);
+    transform: none;
+    animation-timing-function: $ease-glide;
+  }
+  90%,
+  100% {
+    @include at($rest);
+    transform: none;
+  }
+}
+
+@mixin ripple-keyframes($name, $start) {
+  @keyframes #{$name} {
+    0%,
+    #{$start} {
+      opacity: 0;
+      transform: scale(0.2);
+    }
+    #{$start + 1%} {
+      opacity: 1;
+      transform: scale(0.35);
+      animation-timing-function: $ease-glide;
+    }
+    #{$start + 9%} {
+      opacity: 0;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+}
+
+@include ripple-keyframes(ripple-build, 32%);
+@include ripple-keyframes(ripple-line, 58%);
+
+@keyframes press {
+  0%,
+  32%,
+  36%,
+  100% {
+    filter: none;
+    transform: translate(-50%, -50%);
+  }
+  33%,
+  35% {
+    filter: brightness(1.25);
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+}
+
+@keyframes highlight {
+  0%,
+  58%,
+  92%,
+  100% {
+    background: transparent;
+  }
+  60%,
+  86% {
+    background: #e7e3ff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage__camera,
+  .stage__cursor,
+  .stage__ripple,
+  .app__button,
+  .app__line--target {
+    animation: none;
+  }
+
+  .stage__cursor {
+    @include at($build);
+  }
+}

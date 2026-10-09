@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2440a8"/>
+      <stop offset="0.55" stop-color="#5b2a9a"/>
+      <stop offset="1" stop-color="#b8226a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.22" cy="0.12" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#backdrop)"/>
+  <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+
+  <g>
+    <rect x="88" y="118" width="336" height="236" rx="40" fill="url(#glass)"/>
+    <rect x="88.75" y="118.75" width="334.5" height="234.5" rx="39.25" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+  </g>
+  <circle cx="128" cy="156" r="10" fill="#ff5147"/>
+  <rect x="152" y="150" width="72" height="12" rx="6" fill="#ffffff" fill-opacity="0.35"/>
+  <rect x="120" y="196" width="176" height="14" rx="7" fill="#ffffff" fill-opacity="0.28"/>
+  <rect x="120" y="226" width="128" height="14" rx="7" fill="#ffffff" fill-opacity="0.2"/>
+
+  <path d="M70 420 C 170 410, 250 360, 318 300" fill="none" stroke="url(#trail)" stroke-width="16" stroke-linecap="round"/>
+
+  <g transform="translate(318 300) scale(5.4)">
+    <path d="M0 0 L0 16 L4 12.5 L7 19 L9.5 18 L6.5 11.5 L11.5 11.5 Z" fill="#ffffff" stroke="#151024" stroke-width="1.2" stroke-linejoin="round"/>
+  </g>
+</svg>

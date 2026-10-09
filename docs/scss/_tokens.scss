@@ -1,0 +1,104 @@
+@use "sass:map";
+
+$palette: (
+  "ink": #0f1120,
+  "ink-raised": #171a2e,
+  "paper": #f4f5fb,
+  "signal": #f0453b,
+  "cobalt": #2440a8,
+  "iris": #5b2a9a,
+  "orchid": #b8226a,
+  "frost": #c9cff0,
+);
+
+$themes: (
+  "light": (
+    "bg": #f4f5fb,
+    "bg-soft": #eceef7,
+    "surface": #ffffff,
+    "text": #171a2b,
+    "muted": #5d6380,
+    "line": #e1e4ef,
+    "accent": #4b39c8,
+    "accent-soft": #ebe8ff,
+    "code-bg": #0f1120,
+    "code-text": #e4e7f5,
+    "glass": rgba(244, 245, 251, 0.72),
+    "glass-line": rgba(23, 26, 43, 0.08),
+    "ok": #1f8f55,
+    "warn": #a86b12,
+  ),
+  "dark": (
+    "bg": #0f1120,
+    "bg-soft": #151831,
+    "surface": #171a2e,
+    "text": #e8eaf6,
+    "muted": #9aa0bd,
+    "line": #262a45,
+    "accent": #a99bff,
+    "accent-soft": #221f46,
+    "code-bg": #0a0b16,
+    "code-text": #e4e7f5,
+    "glass": rgba(15, 17, 32, 0.72),
+    "glass-line": rgba(255, 255, 255, 0.07),
+    "ok": #5fd394,
+    "warn": #f0c35a,
+  ),
+);
+
+$breakpoints: (
+  "sm": 600px,
+  "md": 900px,
+  "lg": 1180px,
+);
+
+$font-display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+$font-sans: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+$font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+$radius: 12px;
+$radius-lg: 20px;
+$topbar-height: 60px;
+$content-width: 760px;
+$page-width: 1160px;
+$ease-glide: cubic-bezier(0.22, 1, 0.36, 1);
+
+@function color($name) {
+  @return map.get($palette, $name);
+}
+
+@mixin theme-vars($name) {
+  @each $key, $value in map.get($themes, $name) {
+    --#{$key}: #{$value};
+  }
+}
+
+@mixin up($size) {
+  @media (min-width: map.get($breakpoints, $size)) {
+    @content;
+  }
+}
+
+@mixin down($size) {
+  @media (max-width: (map.get($breakpoints, $size) - 1px)) {
+    @content;
+  }
+}
+
+@mixin glass($blur: 18px) {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur($blur) saturate(170%);
+  -webkit-backdrop-filter: blur($blur) saturate(170%);
+}
+
+@mixin focus-ring($color: var(--accent)) {
+  outline: 2px solid $color;
+  outline-offset: 2px;
+}
+
+@mixin wallpaper {
+  background:
+    radial-gradient(120% 90% at 15% 10%, color("cobalt"), transparent 60%),
+    radial-gradient(90% 80% at 85% 90%, color("orchid"), transparent 60%),
+    color("iris");
+}

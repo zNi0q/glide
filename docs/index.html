@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glide docs</title>
+<meta name="description" content="glide records polished screen videos and screenshots on Linux: your window centered on your wallpaper, a smooth cursor, cursor-following zoom and click effects, rendered in 4K on the GPU.">
+<meta name="theme-color" content="#0f1120">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="hero.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="topbar__brand" href="#top">
+    <img class="topbar__logo" src="logo.svg" alt="" width="28" height="28">
+    glide
+  </a>
+  <span class="topbar__version" data-version>Linux</span>
+  <span class="topbar__spacer"></span>
+  <a class="topbar__link" href="#install">Install</a>
+  <a class="topbar__link" href="#cli">Command line</a>
+  <a class="topbar__link" href="https://github.com/zNi0q/glide">GitHub</a>
+  <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+  </button>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero__inner">
+    <div class="hero__intro">
+      <div>
+        <p class="hero__eyebrow">Screen recorder for Linux</p>
+        <h1>Screen recordings that look <em>produced</em>.</h1>
+      </div>
+      <div>
+        <p class="hero__lead">glide records a window and renders it on your wallpaper with a smooth cursor, a camera that follows your work and a ripple wherever you click. In 4K, on your GPU.</p>
+        <div class="hero__actions">
+          <div class="install-chip code">
+            <pre><code><span class="code__prompt">$ </span>curl -fsSL https://raw.githubusercontent.com/zNi0q/glide/master/install.sh | sh</code></pre>
+          </div>
+          <a class="hero-link" href="#quick-start">Quick start →</a>
+        </div>
+      </div>
+    </div>
+
+    <figure class="stage">
+      <div class="stage__screen" role="img" aria-label="A glide recording: a code editor window floats on a wallpaper while the cursor clicks Build, a ripple appears and the camera zooms in to follow">
+        <canvas class="stage__wallpaper" aria-hidden="true"></canvas>
+        <div class="stage__camera" aria-hidden="true">
+          <div class="app">
+            <div class="app__bar">
+              <span>main.rs — Code</span>
+              <span class="app__controls"><i></i><i></i><i></i></span>
+            </div>
+            <div class="app__tools">
+              <span class="app__tab">src/main.rs</span>
+              <span class="app__button">▶ Build</span>
+            </div>
+            <div class="app__code">
+              <span class="app__line"><span><span class="k">use</span> glide::{record, render};</span></span>
+              <span class="app__line"><span> </span></span>
+              <span class="app__line"><span><span class="k">fn</span> <span class="f">main</span>() -&gt; anyhow::Result&lt;()&gt; {</span></span>
+              <span class="app__line"><span>    <span class="k">let</span> take = record::<span class="f">window</span>(<span class="s">"demo"</span>)?;</span></span>
+              <span class="app__line app__line--target"><span>    render::<span class="f">video</span>(&amp;take, Zoom::<span class="f">follow</span>(<span class="s">1.8</span>))?;</span></span>
+              <span class="app__line"><span>    take.<span class="f">save</span>(<span class="s">"~/Videos/glide"</span>)?;</span></span>
+              <span class="app__line"><span>    <span class="f">Ok</span>(())</span></span>
+              <span class="app__line"><span>}</span></span>
+            </div>
+          </div>
+          <span class="stage__ripple stage__ripple--build"></span>
+          <span class="stage__ripple stage__ripple--line"></span>
+          <svg class="stage__cursor" viewBox="-1 -1 14 22"><path d="M0 0 L0 16 L4 12.5 L7 19 L9.5 18 L6.5 11.5 L11.5 11.5 Z" fill="#fff" stroke="#151024" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <figcaption class="stage__meta">
+        <span class="stage__file">glide-demo.mp4</span>
+        <span>3840 × 2160 · 60 fps · H.264 · zoom 1.7× · clicks on</span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<div class="docs">
+  <aside class="sidebar" aria-label="Documentation">
+    <nav class="sidebar__nav">
+      <a href="#features">What glide does</a>
+      <a href="#install">Install</a>
+      <a href="#quick-start">Quick start</a>
+      <a href="#toolbar">The toolbar</a>
+      <a href="#effects">Zoom and clicks</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#cli">Command line</a>
+      <a href="#files">Output files</a>
+      <a href="#desktops">Desktop support</a>
+      <a href="#updating">Updating</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#development">Development</a>
+      <a href="#license">License</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <details class="mobile-toc">
+      <summary>On this page</summary>
+      <nav>
+        <a href="#features">What glide does</a>
+        <a href="#install">Install</a>
+        <a href="#quick-start">Quick start</a>
+        <a href="#toolbar">The toolbar</a>
+        <a href="#effects">Zoom and clicks</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#cli">Command line</a>
+        <a href="#files">Output files</a>
+        <a href="#desktops">Desktop support</a>
+        <a href="#updating">Updating</a>
+        <a href="#how-it-works">How it works</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#development">Development</a>
+        <a href="#license">License</a>
+      </nav>
+    </details>
+
+    <section id="features">
+      <h2>What glide does</h2>
+      <p>glide is inspired by Screen Studio on macOS. It records what you pick, then renders a finished video where your window sits on your wallpaper like a product demo.</p>
+      <ul class="features">
+        <li><strong>Window or whole screen</strong><span>Pick what to record in your desktop's own picker, or click the window on X11.</span></li>
+        <li><strong>On your wallpaper</strong><span>Centered on your current wallpaper, a gradient or any image, with rounded corners and a soft shadow.</span></li>
+        <li><strong>Camera that follows you</strong><span>Optional zoom that moves toward where you work and eases out as you move on.</span></li>
+        <li><strong>Ripples on clicks</strong><span>A soft ring marks every click and touchpad tap, when you turn it on.</span></li>
+        <li><strong>4K, rendered on the GPU</strong><span>Composited in a GPU shader and encoded with hardware H.264 where available.</span></li>
+        <li><strong>Screenshots too</strong><span>One frame, framed the same way, saved as a 4K PNG.</span></li>
+      </ul>
+    </section>
+
+    <section id="install">
+      <h2>Install</h2>
+      <p>The install script downloads the latest release for your machine, verifies its checksum, installs <code>glide</code> to <code>~/.local/bin</code> and adds glide to your application menu.</p>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>curl -fsSL https://raw.githubusercontent.com/zNi0q/glide/master/install.sh | sh</code></pre></div>
+      <p>Release builds exist for <code>x86_64</code> and <code>aarch64</code> and need glibc 2.39 or newer: Ubuntu 24.04, Debian 13, Fedora 40, Arch and newer.</p>
+
+      <h3>Requirements</h3>
+      <ul>
+        <li>A Wayland or X11 session. On X11, a compositing window manager is needed for the glass toolbar.</li>
+        <li><code>ffmpeg</code> and <code>ffprobe</code>, plus a GPU with Vulkan or OpenGL ES drivers.</li>
+        <li>On Wayland: PipeWire and <code>xdg-desktop-portal</code> with your desktop's backend (see <a href="#desktops">Desktop support</a>).</li>
+      </ul>
+
+      <h3>Install by hand</h3>
+      <p>Download <code>glide-&lt;version&gt;-&lt;arch&gt;-linux.tar.gz</code> and its <code>.sha256</code> from the <a href="https://github.com/zNi0q/glide/releases/latest">latest release</a>, then:</p>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>sha256sum -c glide-*-linux.tar.gz.sha256
+<span class="code__prompt">$ </span>tar -xzf glide-*-linux.tar.gz
+<span class="code__prompt">$ </span>install -Dm755 glide-*-linux/glide ~/.local/bin/glide</code></pre></div>
+
+      <h3>Build from source</h3>
+      <p>Needs Rust 1.95 or newer, <code>clang</code> and the PipeWire development headers.</p>
+      <div class="code"><pre><code><span class="code__comment"># Arch Linux</span>
+<span class="code__prompt">$ </span>sudo pacman -S --needed rustup clang pipewire ffmpeg vulkan-icd-loader
+<span class="code__comment"># Debian or Ubuntu</span>
+<span class="code__prompt">$ </span>sudo apt install clang libpipewire-0.3-dev libxkbcommon-dev ffmpeg libvulkan1
+<span class="code__prompt">$ </span>git clone https://github.com/zNi0q/glide &amp;&amp; cd glide
+<span class="code__prompt">$ </span>cargo build --release</code></pre></div>
+    </section>
+
+    <section id="quick-start">
+      <h2>Quick start</h2>
+      <ol class="steps">
+        <li>Run <code>glide ui</code>, or open <strong>glide</strong> from your application menu.</li>
+        <li>Choose <strong>Window</strong> or <strong>Screen</strong>, and optionally a zoom level and click ripples under <strong>Effects</strong>.</li>
+        <li>Press <strong>Record</strong> and pick what to record. On Wayland your desktop shows its picker; on X11, click the window (<kbd>Esc</kbd> cancels).</li>
+        <li>Press <strong>■</strong> in the recording pill to stop. glide renders the 4K video and offers <strong>Open</strong> and <strong>Show in folder</strong>.</li>
+      </ol>
+      <p>Prefer the terminal? Record with <code>glide record myvideo</code>, stop with <kbd>Ctrl</kbd>+<kbd>C</kbd>, then <code>glide render myvideo -o myvideo.mp4</code>.</p>
+    </section>
+
+    <section id="toolbar">
+      <h2>The toolbar</h2>
+      <p><code>glide ui</code> shows a floating glass toolbar near the bottom of the screen. Drag it anywhere by its glass. Around it, clicks go straight through to your windows.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Window / Screen</td><td>What the next recording or screenshot captures.</td></tr>
+            <tr><td>Effects</td><td>Cursor-following zoom (Off, 1.5×, 1.8×, 2.5×) and the <strong>Show clicks</strong> toggle.</td></tr>
+            <tr><td>Background</td><td>Your wallpaper, a gradient, or any image you choose.</td></tr>
+            <tr><td>Screenshot</td><td>Captures one polished 4K PNG.</td></tr>
+            <tr><td>Record</td><td>Starts recording. The toolbar becomes a small pill with a timer and <strong>■</strong> Stop.</td></tr>
+            <tr><td>✕ or <kbd>Esc</kbd></td><td>Closes the toolbar.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <div>
+          <strong>The stop pill never appears in screen recordings</strong>
+          <p>While recording the whole screen, the pill is invisible. Move the pointer to where it sits (bottom center unless you moved it) and it fades in. glide cuts the video just before the pill appeared.</p>
+        </div>
+      </div>
+
+      <h3>Keyboard shortcut</h3>
+      <p>Bind a shortcut such as <kbd>Super</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> to the full path of <code>glide ui</code>:</p>
+      <ul>
+        <li><strong>KDE Plasma:</strong> System Settings → Keyboard → Shortcuts → Add New → Command or Script.</li>
+        <li><strong>GNOME:</strong> Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts.</li>
+        <li><strong>COSMIC:</strong> Settings → Keyboard → Keyboard Shortcuts → Custom Shortcuts.</li>
+        <li><strong>Hyprland:</strong> <code>bind = SUPER SHIFT, R, exec, glide ui</code></li>
+        <li><strong>Sway:</strong> <code>bindsym $mod+Shift+r exec glide ui</code></li>
+      </ul>
+    </section>
+
+    <section id="effects">
+      <h2>Zoom and clicks</h2>
+      <h3>Cursor-following zoom</h3>
+      <p>Off by default. When on, glide plans the camera after recording with a second of look-ahead: it zooms into the area where your cursor is busy, follows it, and eases back out when the cursor roams widely or rests. Every move is smoothed with springs.</p>
+
+      <h3>Click ripples</h3>
+      <p>glide records every click and touchpad tap while recording, so you can decide at render time whether to show them. A ripple appears at the cursor, grows and fades in under half a second.</p>
+      <div class="callout callout--warn">
+        <div>
+          <strong>On Wayland, clicks need one-time setup</strong>
+          <p>Wayland does not let apps see clicks in other windows, so glide reads the mouse device directly. Add your user to the <code>input</code> group, then log out and back in. Members of <code>input</code> can also read keyboard input; glide only opens mouse and touchpad devices. X11 needs no setup.</p>
+        </div>
+      </div>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>sudo usermod -aG input $USER</code></pre></div>
+    </section>
+
+    <section id="screenshots">
+      <h2>Screenshots</h2>
+      <p>Screenshots get the same treatment as videos: the window centered on your wallpaper with rounded corners, saved as a 3840×2160 PNG without the cursor. Press <strong>Screenshot</strong> in the toolbar, or:</p>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>glide screenshot -o shot.png
+<span class="code__prompt">$ </span>glide screenshot -o shot.png --screen</code></pre></div>
+    </section>
+
+    <section id="cli">
+      <h2>Command line</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>glide ui</code></td><td>Show the floating toolbar.</td></tr>
+            <tr><td><code>glide record &lt;dir&gt;</code></td><td>Record a window into a directory. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops.</td></tr>
+            <tr><td><code>glide render &lt;dir&gt;</code></td><td>Render a recording into a finished video.</td></tr>
+            <tr><td><code>glide screenshot</code></td><td>Take a polished screenshot.</td></tr>
+            <tr><td><code>glide update</code></td><td>Check for a newer release and install it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>glide render</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output video. Default <code>glide.mp4</code>.</td></tr>
+            <tr><td><code>--zoom [factor]</code></td><td>Follow the cursor with zoom, up to <code>factor</code> (1 to 4). Without a value, 1.8. Without the option, no zoom.</td></tr>
+            <tr><td><code>--background &lt;image&gt;</code></td><td>Use an image instead of your desktop wallpaper.</td></tr>
+            <tr><td><code>--clicks</code></td><td>Draw a ripple wherever you clicked.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>glide render myvideo -o myvideo.mp4 --zoom 2.5 --clicks</code></pre></div>
+
+      <h3>glide screenshot</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Option</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>-o, --output &lt;file&gt;</code></td><td>Output image. Default <code>glide.png</code>.</td></tr>
+            <tr><td><code>--screen</code></td><td>Capture the whole screen instead of a window.</td></tr>
+            <tr><td><code>--background &lt;image&gt;</code></td><td>Use an image instead of your desktop wallpaper.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>glide update</h3>
+      <p>Shows the newer version and asks before installing. <code>-y</code> or <code>--yes</code> installs without asking.</p>
+    </section>
+
+    <section id="files">
+      <h2>Output files</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>Videos from the toolbar</td><td><code>~/Videos/glide/</code> (your XDG videos directory)</td></tr>
+            <tr><td>Screenshots from the toolbar</td><td><code>~/Pictures/glide/</code> (your XDG pictures directory)</td></tr>
+            <tr><td>Raw recordings</td><td><code>~/.cache/glide/&lt;date&gt;/</code>, kept so you can render again</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A raw recording directory holds:</p>
+      <ul>
+        <li><code>screen.mkv</code>: the window, losslessly encoded at 60 fps without the cursor.</li>
+        <li><code>cursor.txt</code>: one line per frame, <code>x y</code> in window pixels, or <code>-</code> when the cursor is outside.</li>
+        <li><code>clicks.txt</code>: the frame number of every click, when clicks could be read.</li>
+      </ul>
+      <p>Finished videos are 3840×2160 H.264 at 60 fps.</p>
+    </section>
+
+    <section id="desktops">
+      <h2>Desktop support</h2>
+      <p>glide uses standard portals and protocols, so it adapts to each desktop. It is developed on KDE Plasma 6; the others are expected to work but are less tested.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Desktop</th><th>Portal backend</th><th>Toolbar</th><th>Blur</th></tr></thead>
+          <tbody>
+            <tr><td>KDE Plasma</td><td><code>xdg-desktop-portal-kde</code></td><td class="yes">Floating</td><td class="yes">Yes</td></tr>
+            <tr><td>GNOME, Ubuntu, Budgie</td><td><code>xdg-desktop-portal-gnome</code></td><td class="partial">Borderless window</td><td class="partial">Tinted glass</td></tr>
+            <tr><td>COSMIC</td><td><code>xdg-desktop-portal-cosmic</code></td><td class="yes">Floating</td><td>If supported</td></tr>
+            <tr><td>Hyprland</td><td><code>xdg-desktop-portal-hyprland</code></td><td class="yes">Floating</td><td>If supported</td></tr>
+            <tr><td>Sway, river, labwc</td><td><code>xdg-desktop-portal-wlr</code></td><td class="yes">Floating</td><td>If supported</td></tr>
+            <tr><td>X11 with a compositor</td><td>Not needed</td><td class="yes">Floating</td><td>On KDE</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Wallpapers are detected on KDE Plasma, GNOME, Ubuntu, Budgie, Cinnamon, MATE, Xfce and COSMIC, and from hyprpaper, swww, swaybg, feh and nitrogen. Otherwise glide uses a gradient.</p>
+    </section>
+
+    <section id="updating">
+      <h2>Updating</h2>
+      <p>When a new version is released, the toolbar shows <strong>glide x.y.z is available</strong> with <strong>Update</strong> and <strong>Later</strong>. After updating, press <strong>Restart</strong>. From a terminal:</p>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>glide update</code></pre></div>
+      <p>glide downloads the archive for your machine, verifies its checksum and replaces the installed binary.</p>
+    </section>
+
+    <section id="how-it-works">
+      <h2>How it works</h2>
+      <div class="pipeline">
+        <div class="pipeline__row">
+          <span class="pipeline__label">Record</span>
+          <span class="pipeline__step">Portal or X11 Composite</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step">Frames at 60 fps</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step">screen.mkv + cursor.txt + clicks.txt</span>
+        </div>
+        <div class="pipeline__row">
+          <span class="pipeline__label">Render</span>
+          <span class="pipeline__step">ffmpeg decode</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step pipeline__step--gpu">GPU compute shader</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step">NV12</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step">VAAPI H.264</span><span class="pipeline__arrow">→</span>
+          <span class="pipeline__step">4K mp4</span>
+        </div>
+      </div>
+      <ul>
+        <li>On Wayland the cursor is requested as metadata, so frames are recorded without it and its position is logged per frame. On X11, window contents come from the Composite extension.</li>
+        <li>The camera is planned offline with look-ahead and smoothed with critically damped springs.</li>
+        <li>A wgpu compute shader draws the wallpaper, rounded window, camera, ripples and cursor, and writes the hardware encoder's NV12 format directly.</li>
+        <li>Decoding, compositing and encoding run concurrently, so a 4K render runs at about real time on integrated graphics.</li>
+      </ul>
+    </section>
+
+    <section id="troubleshooting" class="faq">
+      <h2>Troubleshooting</h2>
+      <details>
+        <summary>There are no click ripples in my video</summary>
+        <div><p>Turn on <strong>Show clicks</strong> under Effects, or pass <code>--clicks</code>. On Wayland your user must be in the <code>input</code> group (see <a href="#effects">Zoom and clicks</a>); the Effects menu says <em>needs input access</em> until it is.</p></div>
+      </details>
+      <details>
+        <summary>The cursor is missing, or zoom does not follow it</summary>
+        <div><p>Some portals cannot report the cursor separately. glide then records the cursor inside the video, which keeps it visible but means zoom cannot follow it.</p></div>
+      </details>
+      <details>
+        <summary>"This desktop cannot share single windows"</summary>
+        <div><p>Some portal backends only share whole screens. Choose <strong>Screen</strong> instead.</p></div>
+      </details>
+      <details>
+        <summary>The release binary reports a GLIBC version error</summary>
+        <div><p>Release builds need glibc 2.39 or newer. On older distributions, <a href="#install">build from source</a>.</p></div>
+      </details>
+      <details>
+        <summary>The toolbar shows a black box on X11</summary>
+        <div><p>The glass toolbar needs a compositing window manager for transparency. Enable your desktop's compositor, or use a desktop that has one.</p></div>
+      </details>
+      <details>
+        <summary>Where did my recording go?</summary>
+        <div><p>Videos go to <code>~/Videos/glide/</code>, screenshots to <code>~/Pictures/glide/</code> and raw recordings to <code>~/.cache/glide/</code>.</p></div>
+      </details>
+    </section>
+
+    <section id="development">
+      <h2>Development</h2>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>cargo fmt
+<span class="code__prompt">$ </span>cargo clippy --all-targets -- -D warnings
+<span class="code__prompt">$ </span>cargo test
+<span class="code__prompt">$ </span>cargo test --release -- --include-ignored</code></pre></div>
+      <p>The last command also runs the tests that need a GPU, ffmpeg, the portal or an X server.</p>
+      <h3>Releasing</h3>
+      <p>Every push to <code>master</code> is built and tested on GitHub Actions. To release, raise <code>version</code> in <code>Cargo.toml</code>, run <code>cargo build</code> so <code>Cargo.lock</code> follows, then commit and push. The workflow tags the version, builds x86_64 and aarch64 archives and publishes them, and installed copies offer the update.</p>
+      <h3>These docs</h3>
+      <p>The styles are written in SCSS under <code>docs/scss</code>:</p>
+      <div class="code"><pre><code><span class="code__prompt">$ </span>cd docs &amp;&amp; pnpm install &amp;&amp; pnpm build</code></pre></div>
+    </section>
+
+    <section id="license">
+      <h2>License</h2>
+      <p>glide is free for non-commercial use under the <a href="https://github.com/zNi0q/glide/blob/master/LICENSE">PolyForm Noncommercial License 1.0.0</a>. You may use, study, modify and share it for personal projects, hobbies, research, education, and charitable or public organizations. Commercial use is not permitted without written permission from the author.</p>
+    </section>
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="footer__inner">
+    <p>glide by <a href="https://github.com/zNi0q">zNi0q</a> · free for non-commercial use</p>
+    <p><a href="https://github.com/zNi0q/glide">Source</a> · <a href="https://github.com/zNi0q/glide/releases/latest">Latest release</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
